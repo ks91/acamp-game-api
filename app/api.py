@@ -8,11 +8,26 @@ from app.location_store import LocationSample, LocationStore
 
 
 def _team_tokens_from_environment() -> dict[str, str]:
-    """Return the internal token-to-team mapping from a team-to-token JSON map."""
+    """Return the internal token-to-team mapping from deployment configuration.
+
+    Individual variables such as ACAMP_GAME_TEAM_TOKEN_GREEN avoid quoting JSON
+    in a systemd EnvironmentFile and take precedence over the legacy JSON map.
+    """
+    individual_tokens = {
+        value: key.removeprefix("ACAMP_GAME_TEAM_TOKEN_").lower()
+        for key, value in os.environ.items()
+        if key.startswith("ACAMP_GAME_TEAM_TOKEN_") and value
+    }
+    if individual_tokens:
+        return individual_tokens
+
     configured = os.environ.get("ACAMP_GAME_TEAM_TOKENS_JSON", "{}")
-    team_to_token = json.loads(configured)
+    try:
+        team_to_token = json.loads(configured)
+    except json.JSONDecodeError:
+        return {}
     if not isinstance(team_to_token, dict):
-        raise ValueError("ACAMP_GAME_TEAM_TOKENS_JSON must be a JSON object")
+        return {}
     return {str(token): str(team_id) for team_id, token in team_to_token.items()}
 
 
