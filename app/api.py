@@ -68,8 +68,10 @@ def create_app(config: dict | None = None) -> Flask:
         except (KeyError, TypeError, ValueError):
             return jsonify(error="invalid location sample"), 400
 
-        event_id = LocationStore(app.config["DATABASE_PATH"]).add(sample)
-        return jsonify(accepted=True, event_id=event_id), 201
+        result = LocationStore(app.config["DATABASE_PATH"]).add(sample)
+        if result.duplicate:
+            return jsonify(accepted=True, duplicate=True, event_id=result.event_id)
+        return jsonify(accepted=True, event_id=result.event_id), 201
 
     return app
 
@@ -88,6 +90,7 @@ def _location_sample_from(payload: dict[str, Any]) -> LocationSample:
     if not -90 <= latitude <= 90 or not -180 <= longitude <= 180 or accuracy_m < 0:
         raise ValueError("coordinates or accuracy are out of range")
     return LocationSample(
+        sample_id=str(payload["sample_id"]),
         team_id=str(payload["team_id"]),
         device_id=str(payload["device_id"]),
         client_time=str(payload["client_time"]),

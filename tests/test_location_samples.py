@@ -30,6 +30,7 @@ class LocationSamplesEndpointTests(unittest.TestCase):
                 "team_id": "green",
                 "device_id": "green-ipad",
                 "client_time": "2026-09-20T10:00:00+09:00",
+                "sample_id": "green-0001",
                 "latitude": 35.3387,
                 "longitude": 139.4888,
                 "accuracy_m": 18.5,
@@ -55,6 +56,7 @@ class LocationSamplesEndpointTests(unittest.TestCase):
                 "team_id": "pink",
                 "device_id": "green-ipad",
                 "client_time": "2026-09-20T10:00:00+09:00",
+                "sample_id": "green-0001",
                 "latitude": 35.3387,
                 "longitude": 139.4888,
                 "accuracy_m": 18.5,
@@ -66,6 +68,32 @@ class LocationSamplesEndpointTests(unittest.TestCase):
             {"error": "team token does not match team_id"},
             response.get_json(),
         )
+    def test_retrying_a_sample_id_returns_its_original_event_without_duplication(self):
+        sample = {
+            "team_id": "green",
+            "device_id": "green-ipad",
+            "client_time": "2026-09-20T10:00:00+09:00",
+            "sample_id": "green-retry-0001",
+            "latitude": 35.3387,
+            "longitude": 139.4888,
+            "accuracy_m": 18.5,
+        }
+        headers = {"Authorization": "Bearer test-green-token"}
+
+        first = self.client.post("/v1/location-samples", headers=headers, json=sample)
+        second = self.client.post("/v1/location-samples", headers=headers, json=sample)
+
+        self.assertEqual(201, first.status_code)
+        self.assertEqual(200, second.status_code)
+        self.assertEqual({"accepted": True, "event_id": 1}, first.get_json())
+        self.assertEqual(
+            {"accepted": True, "duplicate": True, "event_id": 1},
+            second.get_json(),
+        )
+        with sqlite3.connect(self.database_path) as connection:
+            count = connection.execute("SELECT COUNT(*) FROM location_events").fetchone()[0]
+        self.assertEqual(1, count)
+
     def test_individual_team_token_environment_variable_takes_priority_over_json(self):
         with patch.dict(
             os.environ,
@@ -86,6 +114,7 @@ class LocationSamplesEndpointTests(unittest.TestCase):
                 "team_id": "green",
                 "device_id": "green-ipad",
                 "client_time": "2026-09-20T10:00:00+09:00",
+                "sample_id": "green-0001",
                 "latitude": 35.3387,
                 "longitude": 139.4888,
                 "accuracy_m": 18.5,
@@ -111,6 +140,7 @@ class LocationSamplesEndpointTests(unittest.TestCase):
                 "team_id": "green",
                 "device_id": "green-ipad",
                 "client_time": "2026-09-20T10:00:00+09:00",
+                "sample_id": "green-0001",
                 "latitude": 35.3387,
                 "longitude": 139.4888,
                 "accuracy_m": 18.5,
