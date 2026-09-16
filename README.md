@@ -5,6 +5,7 @@ Academy Camp 2026 position-game API and game-state service.
 ## Initial contract
 
 - `GET /health` returns the service health status.
+- `POST /v1/location-samples` accepts an authenticated team-device location sample and records it as an event.
 - A spot claim is idempotent for `(game_session_id, team_id, place_id)`.
 - The game server, not the iPad, is the authority for a successful claim and its score.
 
@@ -24,6 +25,15 @@ Then request `http://127.0.0.1:8000/health`.
 ## Deployment target
 
 The AWS VM checkout target is `/var/www/acamp-game-api`. Runtime configuration and all credentials stay outside this repository.
+
+To permit team-device check-ins, set a root-owned environment file such as `/etc/acamp-game-api.env` and reference it from the systemd service with `EnvironmentFile=/etc/acamp-game-api.env`:
+
+```bash
+ACAMP_GAME_DATABASE_PATH=/var/lib/acamp-game-api/game.sqlite3
+ACAMP_GAME_TEAM_TOKENS_JSON='{"green":"replace-with-a-long-random-token"}'
+```
+
+The JSON maps `team_id` to its token. Never commit this file or copy its values into Discord.
 
 ## Repository safety
 
