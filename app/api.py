@@ -138,6 +138,8 @@ def create_app(config: dict | None = None) -> Flask:
                 place_definition["latitude"],
                 place_definition["longitude"],
             )
+            if latest_location["accuracy_m"] > place_definition["radius_m"]:
+                return jsonify(error="location accuracy is too low"), 409
             if distance_m > place_definition["radius_m"]:
                 return jsonify(error="team is outside place radius", distance_m=round(distance_m)), 409
         elif isinstance(place_id, str) and place_id in app.config["PLACE_SCORES"]:

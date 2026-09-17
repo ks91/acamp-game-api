@@ -109,6 +109,43 @@ class ActionsEndpointTests(unittest.TestCase):
 
         self.assertEqual(201, response.status_code)
         self.assertTrue(response.get_json()["claimed"])
+    def test_claim_rejects_location_fix_less_accurate_than_the_place_radius(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(
+                    self.temporary_directory.name, "accuracy-gate.sqlite3"
+                ),
+                "TEAM_TOKENS": {"test-green-token": "green"},
+                "PLACE_DEFINITIONS": {
+                    "time-site": {
+                        "latitude": 35.3387,
+                        "longitude": 139.4888,
+                        "radius_m": 40,
+                        "points": 120,
+                    }
+                },
+            }
+        ).test_client()
+        client.post(
+            "/v1/location-samples",
+            headers=self.headers,
+            json={
+                "team_id": "green",
+                "device_id": "green-ipad",
+                "client_time": "2026-09-20T10:00:00+09:00",
+                "sample_id": "imprecise-fix",
+                "latitude": 35.3387,
+                "longitude": 139.4888,
+                "accuracy_m": 41,
+            },
+        )
+
+        response = client.post("/v1/actions", headers=self.headers, json=self.claim)
+
+        self.assertEqual(409, response.status_code)
+        self.assertEqual("location accuracy is too low", response.get_json()["error"])
+
     def test_places_are_loaded_from_a_versioned_scenario_file(self):
         scenario_path = os.path.join(self.temporary_directory.name, "scenario.json")
         with open(scenario_path, "w", encoding="utf-8") as scenario_file:
