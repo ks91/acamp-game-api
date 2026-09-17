@@ -40,7 +40,9 @@ Use one `ACAMP_GAME_TEAM_TOKEN_<TEAM_ID>` variable per team. This avoids JSON qu
 
 ## Scenario places
 
-Set `ACAMP_GAME_SCENARIO_PATH` to a Git-managed scenario JSON file. Each place uses a circle centered on `latitude` / `longitude`; the server compares it to the team's latest submitted location before allowing a claim.
+Set `ACAMP_GAME_SCENARIO_PATH` to a Git-managed scenario JSON file. Coordinates use **WGS 84 decimal degrees**: JSON numbers, no `°` symbols, no degrees/minutes/seconds. Latitude is north-positive; longitude is east-positive. Five decimal places are roughly metre-level precision, so `35.33870` and `139.48880` are suitable inputs; the gameplay radius, not excess decimal digits, determines practical precision.
+
+Each place uses a circle centered on `latitude` / `longitude`; the server compares it to the team's latest submitted location before allowing a claim.
 
 ```json
 {
