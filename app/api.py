@@ -73,6 +73,14 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify(accepted=True, duplicate=True, event_id=result.event_id)
         return jsonify(accepted=True, event_id=result.event_id), 201
 
+    @app.get("/v1/team/state")
+    def team_state():
+        token = _bearer_token(request.headers.get("Authorization"))
+        team_id = app.config["TEAM_TOKENS"].get(token)
+        if team_id is None:
+            return jsonify(error="invalid team token"), 401
+        return jsonify(LocationStore(app.config["DATABASE_PATH"]).team_state(team_id))
+
     return app
 
 

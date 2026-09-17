@@ -54,6 +54,37 @@ class LocationStore:
                 """
             )
 
+    def team_state(self, team_id: str) -> dict:
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM location_events WHERE team_id = ?", (team_id,)
+            ).fetchone()[0]
+            latest = connection.execute(
+                """
+                SELECT event_id, client_time, latitude, longitude, accuracy_m
+                FROM location_events
+                WHERE team_id = ?
+                ORDER BY event_id DESC
+                LIMIT 1
+                """,
+                (team_id,),
+            ).fetchone()
+
+        return {
+            "team_id": team_id,
+            "location_event_count": count,
+            "latest_location": None
+            if latest is None
+            else {
+                "event_id": latest[0],
+                "client_time": latest[1],
+                "latitude": latest[2],
+                "longitude": latest[3],
+                "accuracy_m": latest[4],
+            },
+        }
+
     def add(self, sample: LocationSample) -> LocationInsertResult:
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:
