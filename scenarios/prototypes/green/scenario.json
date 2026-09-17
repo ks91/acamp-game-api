@@ -1,0 +1,22 @@
+{
+  "id": "prototype-green-1",
+  "name": "グリーン班・藤沢横浜試作",
+  "places": [
+    {
+      "id": "time-site",
+      "name": "時間の結節点（キャンプ事務所）",
+      "latitude": 35.376953216367625,
+      "longitude": 139.44908820186404,
+      "radius_m": 40,
+      "points": 120
+    },
+    {
+      "id": "konandai-site",
+      "name": "横浜の新しい地点（港南台駅）",
+      "latitude": 35.375423546260436,
+      "longitude": 139.5766886531196,
+      "radius_m": 40,
+      "points": 120
+    }
+  ]
+}

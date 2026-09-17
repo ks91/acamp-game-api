@@ -1,0 +1,12 @@
+{
+  "green": {
+    "game_session_id": "prototype-green-1",
+    "status": "test",
+    "scenario_path": "prototypes/green/scenario.json"
+  },
+  "blue": {
+    "game_session_id": "prototype-blue-1",
+    "status": "test",
+    "scenario_path": "prototypes/blue/scenario.json"
+  }
+}
