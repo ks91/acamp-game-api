@@ -70,6 +70,7 @@ def create_app(config: dict | None = None) -> Flask:
         PLACE_SCORES=_place_scores_from_environment(),
         PLACE_DEFINITIONS=_place_definitions_from_environment(),
         SCENARIO=_scenario_from_environment(),
+        GAME_SESSION_ID=os.environ.get("ACAMP_GAME_SESSION_ID"),
     )
     if config:
         app.config.update(config)
@@ -174,7 +175,12 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        return jsonify(LocationStore(app.config["DATABASE_PATH"]).team_state(team_id))
+        location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
+        game_state = PersistentGameStore(app.config["DATABASE_PATH"]).team_summary(
+            app.config["GAME_SESSION_ID"], team_id
+        )
+        location_state.update(game_state)
+        return jsonify(location_state)
 
     return app
 

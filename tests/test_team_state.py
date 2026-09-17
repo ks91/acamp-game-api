@@ -41,6 +41,8 @@ class TeamStateEndpointTests(unittest.TestCase):
         self.assertEqual(
             {
                 "team_id": "green",
+                "score": 0,
+                "claimed_places": [],
                 "location_event_count": 1,
                 "latest_location": {
                     "event_id": 1,

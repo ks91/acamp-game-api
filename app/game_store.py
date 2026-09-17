@@ -30,6 +30,22 @@ class PersistentGameStore:
                 """
             )
 
+    def team_summary(self, game_session_id: str, team_id: str) -> dict:
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            score = connection.execute(
+                "SELECT COALESCE(SUM(score), 0) FROM spot_claims WHERE game_session_id = ? AND team_id = ?",
+                (game_session_id, team_id),
+            ).fetchone()[0]
+            claimed_places = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT place_id FROM spot_claims WHERE game_session_id = ? AND team_id = ? ORDER BY rowid",
+                    (game_session_id, team_id),
+                )
+            ]
+        return {"score": score, "claimed_places": claimed_places}
+
     def claim_place(
         self,
         *,

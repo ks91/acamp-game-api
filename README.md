@@ -34,6 +34,7 @@ To permit team-device check-ins, set a root-owned environment file such as `/etc
 ACAMP_GAME_DATABASE_PATH=/var/lib/acamp-game-api/game.sqlite3
 ACAMP_GAME_TEAM_TOKEN_GREEN=replace-with-a-long-random-token
 ACAMP_GAME_SCENARIO_PATH=/var/www/acamp-game-api/scenarios/fujisawa-test-1.json
+ACAMP_GAME_SESSION_ID=fujisawa-test-1
 ```
 
 Use one `ACAMP_GAME_TEAM_TOKEN_<TEAM_ID>` variable per team. This avoids JSON quoting in systemd environment files. Never commit this file or copy its values into Discord.
