@@ -33,10 +33,25 @@ To permit team-device check-ins, set a root-owned environment file such as `/etc
 ```bash
 ACAMP_GAME_DATABASE_PATH=/var/lib/acamp-game-api/game.sqlite3
 ACAMP_GAME_TEAM_TOKEN_GREEN=replace-with-a-long-random-token
-ACAMP_GAME_PLACE_SCORE_TIME_SITE=120
+ACAMP_GAME_SCENARIO_PATH=/var/www/acamp-game-api/scenarios/fujisawa-test-1.json
 ```
 
 Use one `ACAMP_GAME_TEAM_TOKEN_<TEAM_ID>` variable per team. This avoids JSON quoting in systemd environment files. Never commit this file or copy its values into Discord.
+
+## Scenario places
+
+Set `ACAMP_GAME_SCENARIO_PATH` to a Git-managed scenario JSON file. Each place uses a circle centered on `latitude` / `longitude`; the server compares it to the team's latest submitted location before allowing a claim.
+
+```json
+{
+  "id": "time-site",
+  "name": "時間の結節点",
+  "latitude": 35.3387,
+  "longitude": 139.4888,
+  "radius_m": 40,
+  "points": 120
+}
+```
 
 ## Repository safety
 

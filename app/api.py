@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from typing import Any
 
@@ -42,6 +43,15 @@ def _place_scores_from_environment() -> dict[str, int]:
     return scores
 
 
+def _place_definitions_from_environment() -> dict:
+    scenario_path = os.environ.get("ACAMP_GAME_SCENARIO_PATH")
+    if not scenario_path:
+        return {}
+    with open(scenario_path, "r", encoding="utf-8") as scenario_file:
+        scenario = json.load(scenario_file)
+    return {place["id"]: place for place in scenario.get("places", [])}
+
+
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(
@@ -50,6 +60,7 @@ def create_app(config: dict | None = None) -> Flask:
         ),
         TEAM_TOKENS=_team_tokens_from_environment(),
         PLACE_SCORES=_place_scores_from_environment(),
+        PLACE_DEFINITIONS=_place_definitions_from_environment(),
     )
     if config:
         app.config.update(config)
@@ -95,7 +106,27 @@ def create_app(config: dict | None = None) -> Flask:
         if not isinstance(payload, dict) or payload.get("type") != "claim_place":
             return jsonify(error="unsupported action"), 400
         place_id = payload.get("place_id")
-        if not isinstance(place_id, str) or place_id not in app.config["PLACE_SCORES"]:
+        if not isinstance(place_id, str):
+            return jsonify(error="unknown place_id"), 404
+        place_definition = app.config["PLACE_DEFINITIONS"].get(place_id)
+        if place_definition is not None:
+            score = place_definition["points"]
+            latest_location = LocationStore(app.config["DATABASE_PATH"]).team_state(
+                team_id
+            )["latest_location"]
+            if latest_location is None:
+                return jsonify(error="location sample required before claim"), 409
+            distance_m = _distance_m(
+                latest_location["latitude"],
+                latest_location["longitude"],
+                place_definition["latitude"],
+                place_definition["longitude"],
+            )
+            if distance_m > place_definition["radius_m"]:
+                return jsonify(error="team is outside place radius", distance_m=round(distance_m)), 409
+        elif isinstance(place_id, str) and place_id in app.config["PLACE_SCORES"]:
+            score = app.config["PLACE_SCORES"][place_id]
+        else:
             return jsonify(error="unknown place_id"), 404
         try:
             game_session_id = str(payload["game_session_id"])
@@ -107,7 +138,7 @@ def create_app(config: dict | None = None) -> Flask:
             game_session_id=game_session_id,
             team_id=team_id,
             place_id=place_id,
-            score=app.config["PLACE_SCORES"][place_id],
+            score=score,
             action_id=action_id,
         )
         response = {
@@ -152,6 +183,17 @@ def _location_sample_from(payload: dict[str, Any]) -> LocationSample:
         longitude=longitude,
         accuracy_m=accuracy_m,
     )
+def _distance_m(latitude_a, longitude_a, latitude_b, longitude_b) -> float:
+    earth_radius_m = 6_371_000
+    latitude_delta = math.radians(latitude_b - latitude_a)
+    longitude_delta = math.radians(longitude_b - longitude_a)
+    haversine = (
+        math.sin(latitude_delta / 2) ** 2
+        + math.cos(math.radians(latitude_a))
+        * math.cos(math.radians(latitude_b))
+        * math.sin(longitude_delta / 2) ** 2
+    )
+    return 2 * earth_radius_m * math.asin(math.sqrt(haversine))
 
 
 app = create_app()
