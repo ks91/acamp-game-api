@@ -71,6 +71,7 @@ def create_app(config: dict | None = None) -> Flask:
         PLACE_DEFINITIONS=_place_definitions_from_environment(),
         SCENARIO=_scenario_from_environment(),
         GAME_SESSION_ID=os.environ.get("ACAMP_GAME_SESSION_ID"),
+        GAME_STATUS=os.environ.get("ACAMP_GAME_STATUS", "test"),
     )
     if config:
         app.config.update(config)
@@ -119,6 +120,10 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
+        if app.config["GAME_STATUS"] == "paused":
+            return jsonify(error="game session is paused"), 409
+        if app.config["GAME_STATUS"] == "finished":
+            return jsonify(error="game session is finished"), 409
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict) or payload.get("type") != "claim_place":
             return jsonify(error="unsupported action"), 400

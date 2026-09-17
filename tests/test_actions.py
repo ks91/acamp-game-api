@@ -29,6 +29,24 @@ class ActionsEndpointTests(unittest.TestCase):
     def tearDown(self):
         self.temporary_directory.cleanup()
 
+    def test_paused_game_session_rejects_place_claims(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(
+                    self.temporary_directory.name, "paused-session.sqlite3"
+                ),
+                "TEAM_TOKENS": {"test-green-token": "green"},
+                "PLACE_SCORES": {"time-site": 120},
+                "GAME_STATUS": "paused",
+            }
+        ).test_client()
+
+        response = client.post("/v1/actions", headers=self.headers, json=self.claim)
+
+        self.assertEqual(409, response.status_code)
+        self.assertEqual("game session is paused", response.get_json()["error"])
+
     def test_claim_place_awards_server_defined_points_only_once_per_team(self):
         first = self.client.post("/v1/actions", headers=self.headers, json=self.claim)
         second = self.client.post("/v1/actions", headers=self.headers, json=self.claim)
