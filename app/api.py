@@ -43,6 +43,14 @@ def _place_scores_from_environment() -> dict[str, int]:
     return scores
 
 
+def _scenario_from_environment() -> dict:
+    scenario_path = os.environ.get("ACAMP_GAME_SCENARIO_PATH")
+    if not scenario_path:
+        return {"id": None, "name": None, "places": []}
+    with open(scenario_path, "r", encoding="utf-8") as scenario_file:
+        return json.load(scenario_file)
+
+
 def _place_definitions_from_environment() -> dict:
     scenario_path = os.environ.get("ACAMP_GAME_SCENARIO_PATH")
     if not scenario_path:
@@ -61,6 +69,7 @@ def create_app(config: dict | None = None) -> Flask:
         TEAM_TOKENS=_team_tokens_from_environment(),
         PLACE_SCORES=_place_scores_from_environment(),
         PLACE_DEFINITIONS=_place_definitions_from_environment(),
+        SCENARIO=_scenario_from_environment(),
     )
     if config:
         app.config.update(config)
@@ -72,6 +81,13 @@ def create_app(config: dict | None = None) -> Flask:
             service="acamp-game-api",
             status="ok",
         )
+
+    @app.get("/v1/game/definition")
+    def game_definition():
+        token = _bearer_token(request.headers.get("Authorization"))
+        if token not in app.config["TEAM_TOKENS"]:
+            return jsonify(error="invalid team token"), 401
+        return jsonify(app.config["SCENARIO"])
 
     @app.post("/v1/location-samples")
     def create_location_sample():
