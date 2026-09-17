@@ -1,12 +1,10 @@
 # Six-team prototype workflow
 
-## Current limit and next foundation
+## Team session registry
 
-The next foundation task is a session registry that assigns each authenticated team its own active session and scenario. `ACAMP_GAME_TEAM_SESSIONS_PATH` can point at a Git-managed mapping such as `scenarios/team-sessions.json`; see `scenarios/team-sessions.example.json` for its shape.
+Set `ACAMP_GAME_TEAM_SESSIONS_PATH` to a Git-managed registry such as `scenarios/team-sessions.json`; see `scenarios/team-sessions.example.json` for its shape. When the registry is enabled, each authenticated team receives its own session, scenario, and default status. Without it, the API retains the single-session fallback for the current Fujisawa test.
 
-When the registry is enabled, each team receives the scenario and session assigned to its token. Without it, the API retains the single-session fallback for the current Fujisawa test.
-
-## Target source layout after team sessions are added
+## Source layout
 
 Keep shared platform code on `main`. Give each team a separate scenario file:
 
@@ -33,4 +31,4 @@ paused    claims rejected
 finished  claims rejected
 ```
 
-Set the value in `/etc/acamp-game-api.env` and restart `acamp-game-api`. Location samples may still be accepted while claims are paused, so staff can diagnose connectivity without changing scores.
+Each registry entry supplies the default status. An admin status change is persisted in SQLite and overrides that default without editing Git during play. Location samples may still be accepted while claims are paused, so staff can diagnose connectivity without changing scores.
