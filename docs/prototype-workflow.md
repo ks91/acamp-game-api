@@ -1,6 +1,12 @@
 # Six-team prototype workflow
 
-## Source layout
+## Current limit and next foundation
+
+The current API has one active scenario path and one active `game_session_id`, so it can run one field-test game at a time. It does **not** yet isolate six simultaneous team prototypes. The next foundation task is a session registry that assigns each authenticated team its own active session and scenario.
+
+Until that is implemented, run prototype tests sequentially, or use one shared test scenario with different places for each team.
+
+## Target source layout after team sessions are added
 
 Keep shared platform code on `main`. Give each team a separate scenario file:
 
