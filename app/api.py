@@ -92,6 +92,7 @@ def create_app(config: dict | None = None) -> Flask:
         GAME_SESSION_ID=os.environ.get("ACAMP_GAME_SESSION_ID"),
         GAME_STATUS=os.environ.get("ACAMP_GAME_STATUS", "test"),
         TEAM_SESSIONS=_team_sessions_from_environment(),
+        ADMIN_TOKEN=os.environ.get("ACAMP_GAME_ADMIN_TOKEN"),
     )
     if config:
         app.config.update(config)
@@ -201,6 +202,38 @@ def create_app(config: dict | None = None) -> Flask:
             "team_score": result.team_score,
         }
         return jsonify(response), 201 if result.claimed else 200
+
+    @app.get("/v1/admin/overview")
+    def admin_overview():
+        token = _bearer_token(request.headers.get("Authorization"))
+        if not app.config["ADMIN_TOKEN"] or token != app.config["ADMIN_TOKEN"]:
+            return jsonify(error="invalid admin token"), 401
+
+        teams = []
+        for team_id in sorted(set(app.config["TEAM_TOKENS"].values())):
+            session = _team_session(app, team_id)
+            location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
+            game_state = PersistentGameStore(app.config["DATABASE_PATH"]).team_summary(
+                session["game_session_id"], team_id
+            )
+            latest_location = location_state["latest_location"]
+            teams.append(
+                {
+                    "team_id": team_id,
+                    "game_session_id": session["game_session_id"],
+                    "status": session["status"],
+                    "score": game_state["score"],
+                    "claimed_places": game_state["claimed_places"],
+                    "location_event_count": location_state["location_event_count"],
+                    "latest_location_time": (
+                        latest_location["client_time"] if latest_location else None
+                    ),
+                    "latest_location_accuracy_m": (
+                        latest_location["accuracy_m"] if latest_location else None
+                    ),
+                }
+            )
+        return jsonify(teams=teams)
 
     @app.get("/v1/team/state")
     def team_state():
