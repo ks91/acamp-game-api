@@ -1,6 +1,7 @@
 import json
 import math
 import os
+from datetime import datetime, timezone
 from typing import Any
 
 from flask import Flask, jsonify, request
@@ -107,6 +108,7 @@ def create_app(config: dict | None = None) -> Flask:
         GAME_STATUS=os.environ.get("ACAMP_GAME_STATUS", "test"),
         TEAM_SESSIONS=_team_sessions_from_environment(),
         ADMIN_TOKEN=os.environ.get("ACAMP_GAME_ADMIN_TOKEN"),
+        MAX_LOCATION_AGE_SECONDS=int(os.environ.get("ACAMP_GAME_MAX_LOCATION_AGE_SECONDS", "300")),
     )
     if config:
         app.config.update(config)
@@ -178,6 +180,12 @@ def create_app(config: dict | None = None) -> Flask:
             )["latest_location"]
             if latest_location is None:
                 return jsonify(error="location sample required before claim"), 409
+            received_at = datetime.fromisoformat(latest_location["received_at"]).replace(
+                tzinfo=timezone.utc
+            )
+            age_seconds = (datetime.now(timezone.utc) - received_at).total_seconds()
+            if age_seconds > app.config["MAX_LOCATION_AGE_SECONDS"]:
+                return jsonify(error="location sample is too old"), 409
             distance_m = _distance_m(
                 latest_location["latitude"],
                 latest_location["longitude"],
@@ -269,6 +277,8 @@ def create_app(config: dict | None = None) -> Flask:
         if team_id is None:
             return jsonify(error="invalid team token"), 401
         location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
+        if location_state["latest_location"]:
+            location_state["latest_location"].pop("received_at")
         game_state = PersistentGameStore(app.config["DATABASE_PATH"]).team_summary(
             _resolved_team_session(app, team_id)["game_session_id"], team_id
         )

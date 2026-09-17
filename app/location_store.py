@@ -62,7 +62,7 @@ class LocationStore:
             ).fetchone()[0]
             latest = connection.execute(
                 """
-                SELECT event_id, client_time, latitude, longitude, accuracy_m
+                SELECT event_id, client_time, latitude, longitude, accuracy_m, received_at
                 FROM location_events
                 WHERE team_id = ?
                 ORDER BY event_id DESC
@@ -82,6 +82,7 @@ class LocationStore:
                 "latitude": latest[2],
                 "longitude": latest[3],
                 "accuracy_m": latest[4],
+                "received_at": latest[5],
             },
         }
 

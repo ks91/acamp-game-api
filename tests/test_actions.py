@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -28,6 +29,16 @@ class ActionsEndpointTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary_directory.cleanup()
+
+    def test_claim_rejects_a_stale_location_sample(self):
+        database_path = os.path.join(self.temporary_directory.name, "stale.sqlite3")
+        client = create_app({"TESTING": True, "DATABASE_PATH": database_path, "TEAM_TOKENS": {"test-green-token": "green"}, "PLACE_DEFINITIONS": {"time-site": {"latitude": 35.0, "longitude": 139.0, "radius_m": 40, "points": 120}}, "MAX_LOCATION_AGE_SECONDS": 300}).test_client()
+        client.post("/v1/location-samples", headers=self.headers, json={"sample_id": "stale-sample", "team_id": "green", "device_id": "green-ipad", "client_time": "2026-09-17T10:00:00+09:00", "latitude": 35.0, "longitude": 139.0, "accuracy_m": 5})
+        with sqlite3.connect(database_path) as connection:
+            connection.execute("UPDATE location_events SET received_at = '2000-01-01 00:00:00'")
+        response = client.post("/v1/actions", headers=self.headers, json=self.claim)
+        self.assertEqual(409, response.status_code)
+        self.assertEqual("location sample is too old", response.get_json()["error"])
 
     def test_paused_game_session_rejects_place_claims(self):
         client = create_app(
