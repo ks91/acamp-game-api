@@ -2,19 +2,11 @@
   "green": {
     "game_session_id": "prototype-green-2026-09-20",
     "status": "test",
-    "scenario": {
-      "id": "prototype-green-2026-09-20",
-      "name": "グリーン班試作",
-      "places": []
-    }
+    "scenario_path": "prototypes/green/scenario.json"
   },
   "pink": {
     "game_session_id": "prototype-pink-2026-09-20",
     "status": "test",
-    "scenario": {
-      "id": "prototype-pink-2026-09-20",
-      "name": "ピンク班試作",
-      "places": []
-    }
+    "scenario_path": "prototypes/pink/scenario.json"
   }
 }
