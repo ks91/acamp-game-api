@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 
 from app.game_store import PersistentGameStore
 from app.location_store import LocationSample, LocationStore
+from app.session_store import SessionStore
 
 
 def _team_tokens_from_environment() -> dict[str, str]:
@@ -77,6 +78,12 @@ def _team_session(app: Flask, team_id: str) -> dict:
         "status": app.config["GAME_STATUS"],
         "scenario": app.config["SCENARIO"],
     }
+def _resolved_team_session(app: Flask, team_id: str) -> dict:
+    session = dict(_team_session(app, team_id))
+    session["status"] = SessionStore(app.config["DATABASE_PATH"]).status_for(
+        session["game_session_id"], session["status"]
+    )
+    return session
 
 
 def create_app(config: dict | None = None) -> Flask:
@@ -142,7 +149,7 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        session = _team_session(app, team_id)
+        session = _resolved_team_session(app, team_id)
         if session["status"] == "paused":
             return jsonify(error="game session is paused"), 409
         if session["status"] == "finished":
@@ -203,6 +210,19 @@ def create_app(config: dict | None = None) -> Flask:
         }
         return jsonify(response), 201 if result.claimed else 200
 
+    @app.post("/v1/admin/session/status")
+    def set_session_status():
+        token = _bearer_token(request.headers.get("Authorization"))
+        if not app.config["ADMIN_TOKEN"] or token != app.config["ADMIN_TOKEN"]:
+            return jsonify(error="invalid admin token"), 401
+        payload = request.get_json(silent=True) or {}
+        status = payload.get("status")
+        session_id = payload.get("game_session_id")
+        reason = payload.get("reason")
+        if status not in {"test", "live", "paused", "finished"} or not isinstance(session_id, str) or not isinstance(reason, str) or not reason:
+            return jsonify(error="invalid session status change"), 400
+        return jsonify(SessionStore(app.config["DATABASE_PATH"]).set_status(session_id, status, reason))
+
     @app.get("/v1/admin/overview")
     def admin_overview():
         token = _bearer_token(request.headers.get("Authorization"))
@@ -211,7 +231,7 @@ def create_app(config: dict | None = None) -> Flask:
 
         teams = []
         for team_id in sorted(set(app.config["TEAM_TOKENS"].values())):
-            session = _team_session(app, team_id)
+            session = _resolved_team_session(app, team_id)
             location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
             game_state = PersistentGameStore(app.config["DATABASE_PATH"]).team_summary(
                 session["game_session_id"], team_id
@@ -243,7 +263,7 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify(error="invalid team token"), 401
         location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
         game_state = PersistentGameStore(app.config["DATABASE_PATH"]).team_summary(
-            _team_session(app, team_id)["game_session_id"], team_id
+            _resolved_team_session(app, team_id)["game_session_id"], team_id
         )
         location_state.update(game_state)
         return jsonify(location_state)

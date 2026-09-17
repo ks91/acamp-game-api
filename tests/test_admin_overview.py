@@ -32,6 +32,21 @@ class AdminOverviewTests(unittest.TestCase):
     def tearDown(self):
         self.temporary_directory.cleanup()
 
+    def test_admin_can_pause_a_session_with_a_reason(self):
+        response = self.client.post(
+            "/v1/admin/session/status",
+            headers={"Authorization": "Bearer admin-test-token"},
+            json={
+                "game_session_id": "green-test",
+                "status": "paused",
+                "reason": "雨天のため",
+            },
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("paused", response.get_json()["status"])
+        self.assertEqual("雨天のため", response.get_json()["reason"])
+
     def test_overview_requires_admin_token(self):
         response = self.client.get("/v1/admin/overview")
         self.assertEqual(401, response.status_code)
