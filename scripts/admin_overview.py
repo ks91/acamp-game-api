@@ -7,15 +7,15 @@ from urllib.request import Request, urlopen
 
 
 def format_overview(payload):
-    lines = ["班 | 状態 | 得点 | 獲得 | 位置送信 | 最終送信 | GPS精度"]
-    lines.append("---|---|---:|---|---:|---|---")
+    lines = ["班 | セッション | 状態 | 得点 | 獲得 | 位置送信 | 最終送信 | GPS精度"]
+    lines.append("---|---|---|---:|---|---:|---|---")
     for team in payload["teams"]:
         places = ", ".join(team["claimed_places"]) or "—"
         last_time = team["latest_location_time"] or "—"
         accuracy = team["latest_location_accuracy_m"]
         accuracy_text = "—" if accuracy is None else "{:.1f}m".format(accuracy)
         lines.append(
-            "{team_id} | {status} | {score} | {places} | {location_event_count} | {last_time} | {accuracy}".format(
+            "{team_id} | {game_session_id} | {status} | {score} | {places} | {location_event_count} | {last_time} | {accuracy}".format(
                 places=places, last_time=last_time, accuracy=accuracy_text, **team
             )
         )
