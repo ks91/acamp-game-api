@@ -60,6 +60,25 @@ def _place_definitions_from_environment() -> dict:
     return {place["id"]: place for place in scenario.get("places", [])}
 
 
+def _team_sessions_from_environment() -> dict:
+    path = os.environ.get("ACAMP_GAME_TEAM_SESSIONS_PATH")
+    if not path:
+        return {}
+    with open(path, "r", encoding="utf-8") as session_file:
+        return json.load(session_file)
+
+
+def _team_session(app: Flask, team_id: str) -> dict:
+    assigned = app.config["TEAM_SESSIONS"].get(team_id)
+    if assigned is not None:
+        return assigned
+    return {
+        "game_session_id": app.config["GAME_SESSION_ID"],
+        "status": app.config["GAME_STATUS"],
+        "scenario": app.config["SCENARIO"],
+    }
+
+
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(
@@ -72,6 +91,7 @@ def create_app(config: dict | None = None) -> Flask:
         SCENARIO=_scenario_from_environment(),
         GAME_SESSION_ID=os.environ.get("ACAMP_GAME_SESSION_ID"),
         GAME_STATUS=os.environ.get("ACAMP_GAME_STATUS", "test"),
+        TEAM_SESSIONS=_team_sessions_from_environment(),
     )
     if config:
         app.config.update(config)
@@ -87,9 +107,10 @@ def create_app(config: dict | None = None) -> Flask:
     @app.get("/v1/game/definition")
     def game_definition():
         token = _bearer_token(request.headers.get("Authorization"))
-        if token not in app.config["TEAM_TOKENS"]:
+        team_id = app.config["TEAM_TOKENS"].get(token)
+        if team_id is None:
             return jsonify(error="invalid team token"), 401
-        return jsonify(app.config["SCENARIO"])
+        return jsonify(_team_session(app, team_id)["scenario"])
 
     @app.post("/v1/location-samples")
     def create_location_sample():
@@ -120,9 +141,10 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        if app.config["GAME_STATUS"] == "paused":
+        session = _team_session(app, team_id)
+        if session["status"] == "paused":
             return jsonify(error="game session is paused"), 409
-        if app.config["GAME_STATUS"] == "finished":
+        if session["status"] == "finished":
             return jsonify(error="game session is finished"), 409
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict) or payload.get("type") != "claim_place":
@@ -130,7 +152,10 @@ def create_app(config: dict | None = None) -> Flask:
         place_id = payload.get("place_id")
         if not isinstance(place_id, str):
             return jsonify(error="unknown place_id"), 404
-        place_definition = app.config["PLACE_DEFINITIONS"].get(place_id)
+        session_places = {
+            place["id"]: place for place in session["scenario"].get("places", [])
+        }
+        place_definition = session_places.get(place_id) or app.config["PLACE_DEFINITIONS"].get(place_id)
         if place_definition is not None:
             score = place_definition["points"]
             latest_location = LocationStore(app.config["DATABASE_PATH"]).team_state(
@@ -153,10 +178,13 @@ def create_app(config: dict | None = None) -> Flask:
         else:
             return jsonify(error="unknown place_id"), 404
         try:
-            game_session_id = str(payload["game_session_id"])
+            requested_session_id = str(payload["game_session_id"])
             action_id = str(payload["action_id"])
         except KeyError:
             return jsonify(error="invalid action"), 400
+        game_session_id = session["game_session_id"] or requested_session_id
+        if session["game_session_id"] and requested_session_id != game_session_id:
+            return jsonify(error="game session does not match team assignment"), 403
 
         result = PersistentGameStore(app.config["DATABASE_PATH"]).claim_place(
             game_session_id=game_session_id,
@@ -182,7 +210,7 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify(error="invalid team token"), 401
         location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
         game_state = PersistentGameStore(app.config["DATABASE_PATH"]).team_summary(
-            app.config["GAME_SESSION_ID"], team_id
+            _team_session(app, team_id)["game_session_id"], team_id
         )
         location_state.update(game_state)
         return jsonify(location_state)

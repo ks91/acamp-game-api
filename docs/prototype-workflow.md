@@ -2,9 +2,9 @@
 
 ## Current limit and next foundation
 
-The current API has one active scenario path and one active `game_session_id`, so it can run one field-test game at a time. It does **not** yet isolate six simultaneous team prototypes. The next foundation task is a session registry that assigns each authenticated team its own active session and scenario.
+The next foundation task is a session registry that assigns each authenticated team its own active session and scenario. `ACAMP_GAME_TEAM_SESSIONS_PATH` can point at a Git-managed mapping such as `scenarios/team-sessions.json`; see `scenarios/team-sessions.example.json` for its shape.
 
-Until that is implemented, run prototype tests sequentially, or use one shared test scenario with different places for each team.
+When the registry is enabled, each team receives the scenario and session assigned to its token. Without it, the API retains the single-session fallback for the current Fujisawa test.
 
 ## Target source layout after team sessions are added
 
