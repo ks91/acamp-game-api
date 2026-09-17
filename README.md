@@ -6,6 +6,8 @@ Academy Camp 2026 position-game API and game-state service.
 
 - `GET /health` returns the service health status.
 - `POST /v1/location-samples` accepts an authenticated team-device location sample and records it as an event.
+- `POST /v1/actions` supports a server-scored `claim_place` action; claims are idempotent per team, place, and game session.
+- `GET /v1/team/state` returns the authenticated team's latest location state.
 - A spot claim is idempotent for `(game_session_id, team_id, place_id)`.
 - The game server, not the iPad, is the authority for a successful claim and its score.
 
@@ -31,6 +33,7 @@ To permit team-device check-ins, set a root-owned environment file such as `/etc
 ```bash
 ACAMP_GAME_DATABASE_PATH=/var/lib/acamp-game-api/game.sqlite3
 ACAMP_GAME_TEAM_TOKEN_GREEN=replace-with-a-long-random-token
+ACAMP_GAME_PLACE_SCORE_TIME_SITE=120
 ```
 
 Use one `ACAMP_GAME_TEAM_TOKEN_<TEAM_ID>` variable per team. This avoids JSON quoting in systemd environment files. Never commit this file or copy its values into Discord.

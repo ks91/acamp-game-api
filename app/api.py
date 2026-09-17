@@ -4,6 +4,7 @@ from typing import Any
 
 from flask import Flask, jsonify, request
 
+from app.game_store import PersistentGameStore
 from app.location_store import LocationSample, LocationStore
 
 
@@ -31,6 +32,16 @@ def _team_tokens_from_environment() -> dict[str, str]:
     return {str(token): str(team_id) for team_id, token in team_to_token.items()}
 
 
+def _place_scores_from_environment() -> dict[str, int]:
+    prefix = "ACAMP_GAME_PLACE_SCORE_"
+    scores = {}
+    for key, value in os.environ.items():
+        if key.startswith(prefix) and value:
+            place_id = key.removeprefix(prefix).lower().replace("_", "-")
+            scores[place_id] = int(value)
+    return scores
+
+
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(
@@ -38,6 +49,7 @@ def create_app(config: dict | None = None) -> Flask:
             "ACAMP_GAME_DATABASE_PATH", "/var/lib/acamp-game-api/game.sqlite3"
         ),
         TEAM_TOKENS=_team_tokens_from_environment(),
+        PLACE_SCORES=_place_scores_from_environment(),
     )
     if config:
         app.config.update(config)
@@ -72,6 +84,40 @@ def create_app(config: dict | None = None) -> Flask:
         if result.duplicate:
             return jsonify(accepted=True, duplicate=True, event_id=result.event_id)
         return jsonify(accepted=True, event_id=result.event_id), 201
+
+    @app.post("/v1/actions")
+    def create_action():
+        token = _bearer_token(request.headers.get("Authorization"))
+        team_id = app.config["TEAM_TOKENS"].get(token)
+        if team_id is None:
+            return jsonify(error="invalid team token"), 401
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict) or payload.get("type") != "claim_place":
+            return jsonify(error="unsupported action"), 400
+        place_id = payload.get("place_id")
+        if not isinstance(place_id, str) or place_id not in app.config["PLACE_SCORES"]:
+            return jsonify(error="unknown place_id"), 404
+        try:
+            game_session_id = str(payload["game_session_id"])
+            action_id = str(payload["action_id"])
+        except KeyError:
+            return jsonify(error="invalid action"), 400
+
+        result = PersistentGameStore(app.config["DATABASE_PATH"]).claim_place(
+            game_session_id=game_session_id,
+            team_id=team_id,
+            place_id=place_id,
+            score=app.config["PLACE_SCORES"][place_id],
+            action_id=action_id,
+        )
+        response = {
+            "action_id": action_id,
+            "claimed": result.claimed,
+            "place_id": place_id,
+            "score_delta": result.score_delta,
+            "team_score": result.team_score,
+        }
+        return jsonify(response), 201 if result.claimed else 200
 
     @app.get("/v1/team/state")
     def team_state():
