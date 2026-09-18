@@ -1,0 +1,7 @@
+{
+  "id": "prototype-yellow-1",
+  "name": "イエロー班・藤沢試作",
+  "places": [
+    {"id": "time-site", "name": "時間の結節点（キャンプ事務所）", "latitude": 35.376953216367625, "longitude": 139.44908820186404, "radius_m": 40, "points": 120}
+  ]
+}

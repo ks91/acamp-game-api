@@ -1,12 +1,8 @@
 {
-  "green": {
-    "game_session_id": "prototype-green-1",
-    "status": "test",
-    "scenario_path": "prototypes/green/scenario.json"
-  },
-  "blue": {
-    "game_session_id": "prototype-blue-1",
-    "status": "test",
-    "scenario_path": "prototypes/blue/scenario.json"
-  }
+  "green": {"game_session_id": "prototype-green-1", "status": "test", "scenario_path": "prototypes/green/scenario.json", "play_device_id": "green-ipad", "development_device_id": "green-wifi-ipad"},
+  "blue": {"game_session_id": "prototype-blue-1", "status": "test", "scenario_path": "prototypes/blue/scenario.json", "play_device_id": "blue-ipad", "development_device_id": "blue-wifi-ipad"},
+  "red": {"game_session_id": "prototype-red-1", "status": "test", "scenario_path": "prototypes/red/scenario.json", "play_device_id": "red-ipad", "development_device_id": "red-wifi-ipad"},
+  "yellow": {"game_session_id": "prototype-yellow-1", "status": "test", "scenario_path": "prototypes/yellow/scenario.json", "play_device_id": "yellow-ipad", "development_device_id": "yellow-wifi-ipad"},
+  "purple": {"game_session_id": "prototype-purple-1", "status": "test", "scenario_path": "prototypes/purple/scenario.json", "play_device_id": "purple-ipad", "development_device_id": "purple-wifi-ipad"},
+  "pink": {"game_session_id": "prototype-pink-1", "status": "test", "scenario_path": "prototypes/pink/scenario.json", "play_device_id": "pink-ipad", "development_device_id": "pink-wifi-ipad"}
 }
