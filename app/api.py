@@ -166,6 +166,10 @@ def create_app(config: dict | None = None) -> Flask:
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict) or payload.get("type") != "claim_place":
             return jsonify(error="unsupported action"), 400
+        requested_device_id = payload.get("device_id")
+        play_device_id = session.get("play_device_id")
+        if play_device_id and requested_device_id != play_device_id:
+            return jsonify(error="device is not allowed to claim"), 403
         place_id = payload.get("place_id")
         if not isinstance(place_id, str):
             return jsonify(error="unknown place_id"), 404
@@ -176,7 +180,7 @@ def create_app(config: dict | None = None) -> Flask:
         if place_definition is not None:
             score = place_definition["points"]
             latest_location = LocationStore(app.config["DATABASE_PATH"]).team_state(
-                team_id
+                team_id, requested_device_id
             )["latest_location"]
             if latest_location is None:
                 return jsonify(error="location sample required before claim"), 409

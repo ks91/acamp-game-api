@@ -30,6 +30,13 @@ class ActionsEndpointTests(unittest.TestCase):
     def tearDown(self):
         self.temporary_directory.cleanup()
 
+    def test_development_device_cannot_claim_for_a_team_with_a_play_device(self):
+        client = create_app({"TESTING": True, "DATABASE_PATH": os.path.join(self.temporary_directory.name, "device.sqlite3"), "TEAM_TOKENS": {"test-green-token": "green"}, "TEAM_SESSIONS": {"green": {"game_session_id": "green-1", "status": "test", "play_device_id": "green-ipad", "development_device_id": "green-wifi-ipad", "scenario": {"id": "green-1", "name": "Green", "places": []}}}}).test_client()
+        claim = dict(self.claim, device_id="green-wifi-ipad")
+        response = client.post("/v1/actions", headers=self.headers, json=claim)
+        self.assertEqual(403, response.status_code)
+        self.assertEqual("device is not allowed to claim", response.get_json()["error"])
+
     def test_claim_rejects_a_stale_location_sample(self):
         database_path = os.path.join(self.temporary_directory.name, "stale.sqlite3")
         client = create_app({"TESTING": True, "DATABASE_PATH": database_path, "TEAM_TOKENS": {"test-green-token": "green"}, "PLACE_DEFINITIONS": {"time-site": {"latitude": 35.0, "longitude": 139.0, "radius_m": 40, "points": 120}}, "MAX_LOCATION_AGE_SECONDS": 300}).test_client()

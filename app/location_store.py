@@ -54,21 +54,20 @@ class LocationStore:
                 """
             )
 
-    def team_state(self, team_id: str) -> dict:
+    def team_state(self, team_id: str, device_id: str | None = None) -> dict:
         self.initialize()
+        where = "team_id = ?"
+        values = [team_id]
+        if device_id is not None:
+            where += " AND device_id = ?"
+            values.append(device_id)
         with sqlite3.connect(self.database_path) as connection:
             count = connection.execute(
-                "SELECT COUNT(*) FROM location_events WHERE team_id = ?", (team_id,)
+                "SELECT COUNT(*) FROM location_events WHERE " + where, values
             ).fetchone()[0]
             latest = connection.execute(
-                """
-                SELECT event_id, client_time, latitude, longitude, accuracy_m, received_at
-                FROM location_events
-                WHERE team_id = ?
-                ORDER BY event_id DESC
-                LIMIT 1
-                """,
-                (team_id,),
+                "SELECT event_id, client_time, latitude, longitude, accuracy_m, received_at FROM location_events WHERE " + where + " ORDER BY event_id DESC LIMIT 1",
+                values,
             ).fetchone()
 
         return {
