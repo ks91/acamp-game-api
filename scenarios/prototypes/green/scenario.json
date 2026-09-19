@@ -7,7 +7,7 @@
       "name": "宿泊A棟",
       "latitude": 35.67751239555854,
       "longitude": 139.69436438878742,
-      "radius_m": 50,
+      "radius_m": 40,
       "points": 120
     },
     {
@@ -15,7 +15,7 @@
       "name": "ローソンS青少年総合センター店",
       "latitude": 35.67602057251197,
       "longitude": 139.69445561756925,
-      "radius_m": 50,
+      "radius_m": 40,
       "points": 120
     },
     {
@@ -23,7 +23,7 @@
       "name": "国際交流棟",
       "latitude": 35.675605588240614,
       "longitude": 139.6946674940398,
-      "radius_m": 50,
+      "radius_m": 40,
       "points": 120
     },
     {
@@ -31,7 +31,7 @@
       "name": "カフェテリアふじ",
       "latitude": 35.67484017956108,
       "longitude": 139.6936804736062,
-      "radius_m": 50,
+      "radius_m": 40,
       "points": 120
     },
     {
@@ -39,7 +39,7 @@
       "name": "センター棟",
       "latitude": 35.67437387858118,
       "longitude": 139.69314002932387,
-      "radius_m": 50,
+      "radius_m": 40,
       "points": 120
     },
     {
@@ -47,7 +47,7 @@
       "name": "ファン カフェ",
       "latitude": 35.675319068974055,
       "longitude": 139.6927542229375,
-      "radius_m": 50,
+      "radius_m": 40,
       "points": 120
     },
     {
@@ -55,7 +55,7 @@
       "name": "参宮橋駅",
       "latitude": 35.678653992614024,
       "longitude": 139.69351436052096,
-      "radius_m": 50,
+      "radius_m": 40,
       "points": 120
     }
   ]
