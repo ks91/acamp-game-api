@@ -274,6 +274,12 @@ class PersistentGameStore(_TerritoryStoreMixin):
             "ranking": ranking,
         }
 
+    def reset_session(self, game_session_id: str) -> None:
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            for table in ("spot_claims", "territory_claims", "territory_action_results", "home_states"):
+                connection.execute("DELETE FROM {} WHERE game_session_id = ?".format(table), (game_session_id,))
+
     def set_home(self, game_session_id: str, team_id: str, place_id: str) -> None:
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:

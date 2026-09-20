@@ -281,6 +281,19 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify(error="invalid session status change"), 400
         return jsonify(SessionStore(app.config["DATABASE_PATH"]).set_status(session_id, status, reason))
 
+    @app.post("/v1/admin/session/reset")
+    def reset_session():
+        token = _bearer_token(request.headers.get("Authorization"))
+        if not app.config["ADMIN_TOKEN"] or token != app.config["ADMIN_TOKEN"]:
+            return jsonify(error="invalid admin token"), 401
+        payload = request.get_json(silent=True) or {}
+        game_session_id = payload.get("game_session_id")
+        reason = payload.get("reason")
+        if not isinstance(game_session_id, str) or not game_session_id or not isinstance(reason, str) or not reason:
+            return jsonify(error="invalid session reset"), 400
+        PersistentGameStore(app.config["DATABASE_PATH"]).reset_session(game_session_id)
+        return jsonify(game_session_id=game_session_id, reset=True, reason=reason)
+
     @app.get("/v1/admin/overview")
     def admin_overview():
         token = _bearer_token(request.headers.get("Authorization"))
