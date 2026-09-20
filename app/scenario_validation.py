@@ -16,6 +16,17 @@ def validate_scenario(scenario):
                     errors.append("ui.{} must be text".format(field))
     if "intro" in scenario and not isinstance(scenario["intro"], str):
         errors.append("intro must be text")
+    if "game_duration_seconds" in scenario and (
+        not isinstance(scenario["game_duration_seconds"], int)
+        or scenario["game_duration_seconds"] <= 0
+    ):
+        errors.append("game_duration_seconds must be a positive integer")
+    if "home_candidates" in scenario:
+        if not isinstance(scenario["home_candidates"], list) or not all(
+            isinstance(place_id, str) and place_id.strip()
+            for place_id in scenario["home_candidates"]
+        ):
+            errors.append("home_candidates must be a list of place ids")
     places = scenario.get("places")
     if not isinstance(places, list):
         return errors + ["places must be a list"]

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+import random
 import sqlite3
 
 
@@ -7,9 +10,128 @@ class ClaimResult:
     claimed: bool
     score_delta: int
     team_score: int
+    transferred: bool = False
+    home_place_id: str | None = None
 
 
-class PersistentGameStore:
+class _TerritoryStoreMixin:
+    def _initialize_territories(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS territory_claims (
+                game_session_id TEXT NOT NULL,
+                place_id TEXT NOT NULL,
+                owner_team_id TEXT NOT NULL,
+                score INTEGER NOT NULL,
+                occurred_at TEXT NOT NULL,
+                PRIMARY KEY (game_session_id, place_id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS home_states (
+                game_session_id TEXT NOT NULL,
+                team_id TEXT NOT NULL,
+                home_place_id TEXT NOT NULL,
+                PRIMARY KEY (game_session_id, team_id)
+            )
+            """
+        )
+
+    @staticmethod
+    def _team_score(connection, game_session_id: str, team_id: str) -> int:
+        return connection.execute(
+            """
+            SELECT COALESCE(SUM(score), 0) FROM territory_claims
+            WHERE game_session_id = ? AND owner_team_id = ?
+            """,
+            (game_session_id, team_id),
+        ).fetchone()[0]
+
+    @staticmethod
+    def _relocate_home(connection, game_session_id: str, team_id: str) -> str | None:
+        candidates = connection.execute(
+            """
+            SELECT place_id, score FROM territory_claims
+            WHERE game_session_id = ? AND owner_team_id = ?
+            ORDER BY score DESC, place_id
+            """,
+            (game_session_id, team_id),
+        ).fetchall()
+        if not candidates:
+            connection.execute(
+                "DELETE FROM home_states WHERE game_session_id = ? AND team_id = ?",
+                (game_session_id, team_id),
+            )
+            return None
+        highest_score = candidates[0][1]
+        highest = [place_id for place_id, score in candidates if score == highest_score]
+        home_place_id = random.choice(highest)
+        connection.execute(
+            """
+            INSERT INTO home_states (game_session_id, team_id, home_place_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT(game_session_id, team_id)
+            DO UPDATE SET home_place_id = excluded.home_place_id
+            """,
+            (game_session_id, team_id, home_place_id),
+        )
+        return home_place_id
+
+    @staticmethod
+    def _claim_with_connection(connection, *, game_session_id, team_id, place_id, score, occurred_at):
+        existing = connection.execute(
+            """
+            SELECT owner_team_id FROM territory_claims
+            WHERE game_session_id = ? AND place_id = ?
+            """,
+            (game_session_id, place_id),
+        ).fetchone()
+        if existing and existing[0] == team_id:
+            return ClaimResult(
+                claimed=False,
+                score_delta=0,
+                team_score=_TerritoryStoreMixin._team_score(connection, game_session_id, team_id),
+            )
+
+        transferred = existing is not None
+        previous_owner = existing[0] if existing else None
+        connection.execute(
+            """
+            INSERT INTO territory_claims
+                (game_session_id, place_id, owner_team_id, score, occurred_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(game_session_id, place_id)
+            DO UPDATE SET owner_team_id = excluded.owner_team_id,
+                          score = excluded.score,
+                          occurred_at = excluded.occurred_at
+            """,
+            (game_session_id, place_id, team_id, score, occurred_at),
+        )
+        home_place_id = None
+        if previous_owner:
+            home = connection.execute(
+                """
+                SELECT home_place_id FROM home_states
+                WHERE game_session_id = ? AND team_id = ? AND home_place_id = ?
+                """,
+                (game_session_id, previous_owner, place_id),
+            ).fetchone()
+            if home:
+                home_place_id = _TerritoryStoreMixin._relocate_home(
+                    connection, game_session_id, previous_owner
+                )
+        return ClaimResult(
+            claimed=True,
+            score_delta=score,
+            team_score=_TerritoryStoreMixin._team_score(connection, game_session_id, team_id),
+            transferred=transferred,
+            home_place_id=home_place_id,
+        )
+
+
+class PersistentGameStore(_TerritoryStoreMixin):
     """Game claims stored in the API's SQLite database."""
 
     def __init__(self, database_path: str):
@@ -29,58 +151,75 @@ class PersistentGameStore:
                 )
                 """
             )
+            self._initialize_territories(connection)
 
     def team_summary(self, game_session_id: str, team_id: str) -> dict:
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:
-            score = connection.execute(
-                "SELECT COALESCE(SUM(score), 0) FROM spot_claims WHERE game_session_id = ? AND team_id = ?",
-                (game_session_id, team_id),
+            claimed = connection.execute(
+                "SELECT COUNT(*) FROM territory_claims WHERE game_session_id = ?",
+                (game_session_id,),
             ).fetchone()[0]
-            claimed_places = [
-                row[0]
-                for row in connection.execute(
-                    "SELECT place_id FROM spot_claims WHERE game_session_id = ? AND team_id = ? ORDER BY rowid",
+            if claimed == 0:
+                score = connection.execute(
+                    "SELECT COALESCE(SUM(score), 0) FROM spot_claims WHERE game_session_id = ? AND team_id = ?",
                     (game_session_id, team_id),
-                )
-            ]
-        return {"score": score, "claimed_places": claimed_places}
+                ).fetchone()[0]
+                claimed_places = [
+                    row[0] for row in connection.execute(
+                        "SELECT place_id FROM spot_claims WHERE game_session_id = ? AND team_id = ? ORDER BY rowid",
+                        (game_session_id, team_id),
+                    )
+                ]
+            else:
+                score = self._team_score(connection, game_session_id, team_id)
+                claimed_places = [
+                    row[0] for row in connection.execute(
+                        """
+                        SELECT place_id FROM territory_claims
+                        WHERE game_session_id = ? AND owner_team_id = ? ORDER BY rowid
+                        """,
+                        (game_session_id, team_id),
+                    )
+                ]
+            home = connection.execute(
+                "SELECT home_place_id FROM home_states WHERE game_session_id = ? AND team_id = ?",
+                (game_session_id, team_id),
+            ).fetchone()
+        return {
+            "score": score,
+            "claimed_places": claimed_places,
+            "home_place_id": home[0] if home else None,
+        }
 
-    def claim_place(
-        self,
-        *,
-        game_session_id: str,
-        team_id: str,
-        place_id: str,
-        score: int,
-        action_id: str,
-    ) -> ClaimResult:
+    def set_home(self, game_session_id: str, team_id: str, place_id: str) -> None:
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:
-            cursor = connection.execute(
+            connection.execute(
                 """
-                INSERT OR IGNORE INTO spot_claims
-                    (game_session_id, team_id, place_id, score, action_id)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO home_states (game_session_id, team_id, home_place_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT(game_session_id, team_id)
+                DO UPDATE SET home_place_id = excluded.home_place_id
                 """,
-                (game_session_id, team_id, place_id, score, action_id),
+                (game_session_id, team_id, place_id),
             )
-            team_score = connection.execute(
-                """
-                SELECT COALESCE(SUM(score), 0)
-                FROM spot_claims
-                WHERE game_session_id = ? AND team_id = ?
-                """,
-                (game_session_id, team_id),
-            ).fetchone()[0]
-        return ClaimResult(
-            claimed=cursor.rowcount == 1,
-            score_delta=score if cursor.rowcount == 1 else 0,
-            team_score=team_score,
-        )
+
+    def claim_place(self, *, game_session_id, team_id, place_id, score, action_id):
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            result = self._claim_with_connection(
+                connection,
+                game_session_id=game_session_id,
+                team_id=team_id,
+                place_id=place_id,
+                score=score,
+                occurred_at=action_id,
+            )
+        return result
 
 
-class GameStore:
+class GameStore(_TerritoryStoreMixin):
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection
 
@@ -97,37 +236,42 @@ class GameStore:
             )
             """
         )
+        self._initialize_territories(self.connection)
         self.connection.commit()
 
-    def claim_place(
-        self,
-        *,
-        game_session_id: str,
-        team_id: str,
-        place_id: str,
-        score: int,
-        occurred_at: str,
-    ) -> ClaimResult:
+    def set_home(self, game_session_id: str, team_id: str, place_id: str) -> None:
         with self.connection:
-            cursor = self.connection.execute(
+            self.connection.execute(
                 """
-                INSERT OR IGNORE INTO spot_claims
-                    (game_session_id, team_id, place_id, score, occurred_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO home_states (game_session_id, team_id, home_place_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT(game_session_id, team_id)
+                DO UPDATE SET home_place_id = excluded.home_place_id
                 """,
-                (game_session_id, team_id, place_id, score, occurred_at),
+                (game_session_id, team_id, place_id),
             )
-            team_score = self.connection.execute(
-                """
-                SELECT COALESCE(SUM(score), 0)
-                FROM spot_claims
-                WHERE game_session_id = ? AND team_id = ?
-                """,
-                (game_session_id, team_id),
-            ).fetchone()[0]
 
-        return ClaimResult(
-            claimed=cursor.rowcount == 1,
-            score_delta=score if cursor.rowcount == 1 else 0,
-            team_score=team_score,
-        )
+    def home_for(self, game_session_id: str, team_id: str) -> str | None:
+        row = self.connection.execute(
+            "SELECT home_place_id FROM home_states WHERE game_session_id = ? AND team_id = ?",
+            (game_session_id, team_id),
+        ).fetchone()
+        return row[0] if row else None
+
+    def place_owner(self, game_session_id: str, place_id: str) -> str | None:
+        row = self.connection.execute(
+            "SELECT owner_team_id FROM territory_claims WHERE game_session_id = ? AND place_id = ?",
+            (game_session_id, place_id),
+        ).fetchone()
+        return row[0] if row else None
+
+    def claim_place(self, *, game_session_id, team_id, place_id, score, occurred_at):
+        with self.connection:
+            return self._claim_with_connection(
+                self.connection,
+                game_session_id=game_session_id,
+                team_id=team_id,
+                place_id=place_id,
+                score=score,
+                occurred_at=occurred_at,
+            )

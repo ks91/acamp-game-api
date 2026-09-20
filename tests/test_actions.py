@@ -205,6 +205,31 @@ class ActionsEndpointTests(unittest.TestCase):
             )
 
         self.assertEqual(120, app.config["PLACE_DEFINITIONS"]["time-site"]["points"])
+    def test_claiming_a_place_transfers_the_flag_between_teams(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "territory.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "PLACE_SCORES": {"cat-point": 30},
+                "GAME_SESSION_ID": "territory-1",
+            }
+        ).test_client()
+        claim = {
+            "action_id": "claim-1",
+            "game_session_id": "territory-1",
+            "type": "claim_place",
+            "place_id": "cat-point",
+        }
+
+        first = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=claim)
+        second = client.post("/v1/actions", headers={"Authorization": "Bearer blue-token"}, json=dict(claim, action_id="claim-2"))
+
+        self.assertEqual(201, first.status_code)
+        self.assertEqual(201, second.status_code)
+        self.assertFalse(first.get_json()["transferred"])
+        self.assertTrue(second.get_json()["transferred"])
+        self.assertEqual(30, second.get_json()["score_delta"])
 
 
 if __name__ == "__main__":

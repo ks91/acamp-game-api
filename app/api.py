@@ -213,7 +213,11 @@ def create_app(config: dict | None = None) -> Flask:
         if session["game_session_id"] and requested_session_id != game_session_id:
             return jsonify(error="game session does not match team assignment"), 403
 
-        result = PersistentGameStore(app.config["DATABASE_PATH"]).claim_place(
+        game_store = PersistentGameStore(app.config["DATABASE_PATH"])
+        configured_home = session.get("home_place_id")
+        if configured_home:
+            game_store.set_home(game_session_id, team_id, configured_home)
+        result = game_store.claim_place(
             game_session_id=game_session_id,
             team_id=team_id,
             place_id=place_id,
@@ -226,6 +230,8 @@ def create_app(config: dict | None = None) -> Flask:
             "place_id": place_id,
             "score_delta": result.score_delta,
             "team_score": result.team_score,
+            "transferred": result.transferred,
+            "home_place_id": result.home_place_id,
         }
         return jsonify(response), 201 if result.claimed else 200
 

@@ -47,6 +47,48 @@ class GameStoreTests(unittest.TestCase):
         self.assertEqual(0, second.score_delta)
         self.assertEqual(120, second.team_score)
 
+    def test_claiming_a_place_transfers_the_flag_and_scores_the_new_owner(self):
+        first = self.store.claim_place(
+            game_session_id="territory-1",
+            team_id="green",
+            place_id="cat-point",
+            score=30,
+            occurred_at="2026-09-20T10:00:00+09:00",
+        )
+        second = self.store.claim_place(
+            game_session_id="territory-1",
+            team_id="blue",
+            place_id="cat-point",
+            score=30,
+            occurred_at="2026-09-20T10:05:00+09:00",
+        )
+
+        self.assertTrue(first.claimed)
+        self.assertTrue(second.claimed)
+        self.assertTrue(second.transferred)
+        self.assertEqual("blue", self.store.place_owner("territory-1", "cat-point"))
+
+    def test_home_moves_to_a_random_high_value_owned_point_after_capture(self):
+        self.store.claim_place(
+            game_session_id="territory-1", team_id="green", place_id="home", score=100,
+            occurred_at="2026-09-20T09:59:00+09:00",
+        )
+        self.store.claim_place(
+            game_session_id="territory-1", team_id="green", place_id="low", score=10,
+            occurred_at="2026-09-20T10:00:00+09:00",
+        )
+        self.store.claim_place(
+            game_session_id="territory-1", team_id="green", place_id="high", score=50,
+            occurred_at="2026-09-20T10:01:00+09:00",
+        )
+        self.store.set_home("territory-1", "green", "home")
+        self.store.claim_place(
+            game_session_id="territory-1", team_id="blue", place_id="home", score=100,
+            occurred_at="2026-09-20T10:02:00+09:00",
+        )
+
+        self.assertEqual("high", self.store.home_for("territory-1", "green"))
+
 
 if __name__ == "__main__":
     unittest.main()
