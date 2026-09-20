@@ -247,16 +247,25 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify(error="game session does not match team assignment"), 403
 
         game_store = PersistentGameStore(app.config["DATABASE_PATH"])
-        configured_home = session.get("home_place_id")
-        if configured_home:
-            game_store.set_home_if_missing(game_session_id, team_id, configured_home)
-        result = game_store.claim_place(
-            game_session_id=game_session_id,
-            team_id=team_id,
-            place_id=place_id,
-            score=score,
-            action_id=action_id,
-        )
+        if session["scenario"].get("claim_policy") == "territory":
+            configured_home = session.get("home_place_id")
+            if configured_home:
+                game_store.set_home_if_missing(game_session_id, team_id, configured_home)
+            result = game_store.claim_place(
+                game_session_id=game_session_id,
+                team_id=team_id,
+                place_id=place_id,
+                score=score,
+                action_id=action_id,
+            )
+        else:
+            result = game_store.claim_place_once_per_team(
+                game_session_id=game_session_id,
+                team_id=team_id,
+                place_id=place_id,
+                score=score,
+                action_id=action_id,
+            )
         response = {
             "action_id": action_id,
             "claimed": result.claimed,

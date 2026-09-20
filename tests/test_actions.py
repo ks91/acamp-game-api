@@ -86,9 +86,9 @@ class ActionsEndpointTests(unittest.TestCase):
         self.assertEqual(
             {
                 "action_id": "green-claim-0001",
-                "claimed": True,
+                "claimed": False,
                 "place_id": "time-site",
-                "score_delta": 120,
+                "score_delta": 0,
                 "team_score": 120,
                 "transferred": False,
                 "home_place_id": None,
@@ -209,6 +209,28 @@ class ActionsEndpointTests(unittest.TestCase):
             )
 
         self.assertEqual(120, app.config["PLACE_DEFINITIONS"]["time-site"]["points"])
+    def test_default_claim_policy_keeps_each_teams_discoveries_independent(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "independent-claims.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "shared-1", "status": "test", "scenario": {"places": []}},
+                    "blue": {"game_session_id": "shared-1", "status": "test", "scenario": {"places": []}},
+                },
+                "PLACE_SCORES": {"cat-point": 30},
+            }
+        ).test_client()
+        claim = {"game_session_id": "shared-1", "type": "claim_place", "place_id": "cat-point"}
+
+        green = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=dict(claim, action_id="green-1"))
+        blue = client.post("/v1/actions", headers={"Authorization": "Bearer blue-token"}, json=dict(claim, action_id="blue-1"))
+
+        self.assertEqual(201, green.status_code)
+        self.assertEqual(201, blue.status_code)
+        self.assertFalse(blue.get_json()["transferred"])
+
     def test_claiming_a_place_transfers_the_flag_between_teams(self):
         client = create_app(
             {
@@ -217,6 +239,10 @@ class ActionsEndpointTests(unittest.TestCase):
                 "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
                 "PLACE_SCORES": {"cat-point": 30},
                 "GAME_SESSION_ID": "territory-1",
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                },
             }
         ).test_client()
         claim = {
@@ -243,6 +269,10 @@ class ActionsEndpointTests(unittest.TestCase):
                 "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
                 "PLACE_SCORES": {"cat-point": 30},
                 "GAME_SESSION_ID": "territory-1",
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                },
             }
         ).test_client()
         action = {
@@ -275,8 +305,8 @@ class ActionsEndpointTests(unittest.TestCase):
                 "PLACE_SCORES": {"green-home": 100, "green-high": 50},
                 "GAME_SESSION_ID": "territory-1",
                 "TEAM_SESSIONS": {
-                    "green": {"game_session_id": "territory-1", "status": "test", "home_place_id": "green-home", "scenario": {"places": []}},
-                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"places": []}},
+                    "green": {"game_session_id": "territory-1", "status": "test", "home_place_id": "green-home", "scenario": {"claim_policy": "territory", "places": []}},
+                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
                 },
             }
         ).test_client()

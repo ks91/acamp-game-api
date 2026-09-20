@@ -314,6 +314,32 @@ class PersistentGameStore(_TerritoryStoreMixin):
                     connection, game_session_id, team_id, random.choice(candidates)
                 )
 
+    def claim_place_once_per_team(
+        self, *, game_session_id, team_id, place_id, score, action_id
+    ) -> ClaimResult:
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO spot_claims
+                    (game_session_id, team_id, place_id, score, action_id)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (game_session_id, team_id, place_id, score, action_id),
+            )
+            team_score = connection.execute(
+                """
+                SELECT COALESCE(SUM(score), 0) FROM spot_claims
+                WHERE game_session_id = ? AND team_id = ?
+                """,
+                (game_session_id, team_id),
+            ).fetchone()[0]
+        return ClaimResult(
+            claimed=cursor.rowcount == 1,
+            score_delta=score if cursor.rowcount == 1 else 0,
+            team_score=team_score,
+        )
+
     def claim_place(self, *, game_session_id, team_id, place_id, score, action_id):
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:

@@ -89,5 +89,6 @@
   "home_candidates": [
     "center-building",
     "cafeteria-fuji"
-  ]
+  ],
+  "claim_policy": "territory"
 }
