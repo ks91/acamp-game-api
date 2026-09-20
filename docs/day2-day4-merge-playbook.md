@@ -44,4 +44,4 @@ For Day 4, all teams point to one session and one scenario; team IDs still keep 
 }
 ```
 
-Use the same pattern for every team. Create a separate Day 5/Day 22 replay session instead of rewriting Day 4 history.
+Use the same pattern for every team. Create a separate later replay/improvement session instead of rewriting Day 4 history.
