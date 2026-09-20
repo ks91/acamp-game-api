@@ -6,6 +6,14 @@ def validate_scenario(scenario):
         errors.append("scenario id is required")
     if not isinstance(scenario.get("name"), str) or not scenario["name"].strip():
         errors.append("scenario name is required")
+    if "ui" in scenario:
+        ui = scenario["ui"]
+        if not isinstance(ui, dict):
+            errors.append("ui must be an object")
+        else:
+            for field in ("accent_color", "background_color"):
+                if field in ui and not isinstance(ui[field], str):
+                    errors.append("ui.{} must be text".format(field))
     if "intro" in scenario and not isinstance(scenario["intro"], str):
         errors.append("intro must be text")
     places = scenario.get("places")
