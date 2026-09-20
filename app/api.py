@@ -88,9 +88,17 @@ def _team_session(app: Flask, team_id: str) -> dict:
     }
 def _resolved_team_session(app: Flask, team_id: str) -> dict:
     session = dict(_team_session(app, team_id))
-    session["status"] = SessionStore(app.config["DATABASE_PATH"]).status_for(
+    session_store = SessionStore(app.config["DATABASE_PATH"])
+    session["status"] = session_store.status_for(
         session["game_session_id"], session["status"]
     )
+    duration_seconds = session["scenario"].get("game_duration_seconds")
+    if duration_seconds is not None:
+        session["remaining_seconds"] = session_store.remaining_seconds(
+            session["game_session_id"], duration_seconds
+        )
+        if session["remaining_seconds"] == 0:
+            session["status"] = "finished"
     return session
 
 
@@ -137,10 +145,20 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify(error="invalid team token"), 401
         session = _resolved_team_session(app, team_id)
         game_store = PersistentGameStore(app.config["DATABASE_PATH"])
+        configured_home = session.get("home_place_id")
+        if configured_home:
+            game_store.set_home_if_missing(session["game_session_id"], team_id, configured_home)
+        else:
+            game_store.set_home_from_candidates_if_missing(
+                session["game_session_id"],
+                team_id,
+                session["scenario"].get("home_candidates", []),
+            )
         state = game_store.public_state(session["game_session_id"], team_id)
         state.update(game_store.team_summary(session["game_session_id"], team_id))
         state["game_session_id"] = session["game_session_id"]
         state["status"] = session["status"]
+        state["remaining_seconds"] = session.get("remaining_seconds")
         state["scenario"] = session["scenario"]
         return jsonify(state)
 
@@ -248,7 +266,7 @@ def create_app(config: dict | None = None) -> Flask:
             "transferred": result.transferred,
             "home_place_id": result.home_place_id,
         }
-        return jsonify(response), 201 if result.claimed else 200
+        return jsonify(response), 201 if result.claimed and not result.replayed else 200
 
     @app.post("/v1/admin/session/status")
     def set_session_status():

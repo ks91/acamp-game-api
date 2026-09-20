@@ -39,6 +39,36 @@ class TeamGameStateEndpointTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertEqual(120, response.get_json()["score"])
         self.assertEqual(["time-site"], response.get_json()["claimed_places"])
+    def test_game_state_assigns_one_secret_home_from_scenario_candidates(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "home-candidates.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green"},
+                "GAME_SESSION_ID": "territory-1",
+                "TEAM_SESSIONS": {
+                    "green": {
+                        "game_session_id": "territory-1",
+                        "status": "test",
+                        "scenario": {
+                            "id": "territory-1",
+                            "name": "陣地戦",
+                            "home_candidates": ["home-a", "home-b"],
+                            "game_duration_seconds": 120,
+                            "places": [],
+                        },
+                    }
+                },
+            }
+        ).test_client()
+
+        first = client.get("/v1/game/state", headers={"Authorization": "Bearer green-token"}).get_json()
+        second = client.get("/v1/game/state", headers={"Authorization": "Bearer green-token"}).get_json()
+
+        self.assertIn(first["home_place_id"], {"home-a", "home-b"})
+        self.assertEqual(120, first["remaining_seconds"])
+        self.assertEqual(first["home_place_id"], second["home_place_id"])
+
     def test_game_state_returns_public_territories_and_only_own_home(self):
         client = create_app(
             {

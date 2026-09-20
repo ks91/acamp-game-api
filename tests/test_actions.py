@@ -86,9 +86,9 @@ class ActionsEndpointTests(unittest.TestCase):
         self.assertEqual(
             {
                 "action_id": "green-claim-0001",
-                "claimed": False,
+                "claimed": True,
                 "place_id": "time-site",
-                "score_delta": 0,
+                "score_delta": 120,
                 "team_score": 120,
                 "transferred": False,
                 "home_place_id": None,
@@ -234,6 +234,37 @@ class ActionsEndpointTests(unittest.TestCase):
         self.assertFalse(first.get_json()["transferred"])
         self.assertTrue(second.get_json()["transferred"])
         self.assertEqual(30, second.get_json()["score_delta"])
+
+    def test_retrying_an_old_action_cannot_recapture_a_place(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "retry-after-transfer.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "PLACE_SCORES": {"cat-point": 30},
+                "GAME_SESSION_ID": "territory-1",
+            }
+        ).test_client()
+        action = {
+            "action_id": "green-action-1",
+            "game_session_id": "territory-1",
+            "type": "claim_place",
+            "place_id": "cat-point",
+        }
+        first = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=action)
+        client.post(
+            "/v1/actions",
+            headers={"Authorization": "Bearer blue-token"},
+            json=dict(action, action_id="blue-action-1"),
+        )
+
+        retry = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=action)
+        state = client.get("/v1/game/state", headers={"Authorization": "Bearer green-token"})
+
+        self.assertEqual(201, first.status_code)
+        self.assertEqual(200, retry.status_code)
+        self.assertEqual(first.get_json(), retry.get_json())
+        self.assertEqual("blue", state.get_json()["territories"][0]["owner"])
 
     def test_capturing_an_opponents_home_does_not_reveal_its_new_location(self):
         client = create_app(

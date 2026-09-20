@@ -21,14 +21,39 @@ class SessionStore:
             )
 
     def set_status(self, game_session_id, status, reason):
+        return self.set_status_at(
+            game_session_id, status, reason, datetime.now(timezone.utc).isoformat()
+        )
+
+    def set_status_at(self, game_session_id, status, reason, occurred_at):
         self.initialize()
-        occurred_at = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(self.database_path) as connection:
             connection.execute(
                 "INSERT INTO session_status_events (game_session_id, status, reason, occurred_at) VALUES (?, ?, ?, ?)",
                 (game_session_id, status, reason, occurred_at),
             )
         return {"game_session_id": game_session_id, "status": status, "reason": reason, "occurred_at": occurred_at}
+
+    def remaining_seconds(self, game_session_id, duration_seconds, now=None):
+        self.initialize()
+        now = now or datetime.now(timezone.utc)
+        with sqlite3.connect(self.database_path) as connection:
+            events = connection.execute(
+                "SELECT status, occurred_at FROM session_status_events WHERE game_session_id = ? ORDER BY event_id",
+                (game_session_id,),
+            ).fetchall()
+        elapsed = 0.0
+        for index, (status, occurred_at) in enumerate(events):
+            if status != "live":
+                continue
+            started = datetime.fromisoformat(occurred_at)
+            ended = (
+                datetime.fromisoformat(events[index + 1][1])
+                if index + 1 < len(events)
+                else now
+            )
+            elapsed += max(0.0, (ended - started).total_seconds())
+        return max(0, int(duration_seconds - elapsed))
 
     def status_for(self, game_session_id, default_status):
         self.initialize()

@@ -12,6 +12,7 @@ class ClaimResult:
     team_score: int
     transferred: bool = False
     home_place_id: str | None = None
+    replayed: bool = False
 
 
 class _TerritoryStoreMixin:
@@ -182,6 +183,22 @@ class PersistentGameStore(_TerritoryStoreMixin):
                 """
             )
             self._initialize_territories(connection)
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS territory_action_results (
+                    game_session_id TEXT NOT NULL,
+                    team_id TEXT NOT NULL,
+                    action_id TEXT NOT NULL,
+                    place_id TEXT NOT NULL,
+                    claimed INTEGER NOT NULL,
+                    score_delta INTEGER NOT NULL,
+                    team_score INTEGER NOT NULL,
+                    transferred INTEGER NOT NULL,
+                    home_place_id TEXT,
+                    PRIMARY KEY (game_session_id, team_id, action_id)
+                )
+                """
+            )
             self._migrate_legacy_claims(connection, "action_id")
 
     def team_summary(self, game_session_id: str, team_id: str) -> dict:
@@ -275,9 +292,42 @@ class PersistentGameStore(_TerritoryStoreMixin):
         with sqlite3.connect(self.database_path) as connection:
             self._set_home_if_missing(connection, game_session_id, team_id, place_id)
 
+    def set_home_from_candidates_if_missing(
+        self, game_session_id: str, team_id: str, candidates: list[str]
+    ) -> None:
+        if not candidates:
+            return
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            existing = connection.execute(
+                "SELECT 1 FROM home_states WHERE game_session_id = ? AND team_id = ?",
+                (game_session_id, team_id),
+            ).fetchone()
+            if existing is None:
+                self._set_home_if_missing(
+                    connection, game_session_id, team_id, random.choice(candidates)
+                )
+
     def claim_place(self, *, game_session_id, team_id, place_id, score, action_id):
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:
+            existing = connection.execute(
+                """
+                SELECT place_id, claimed, score_delta, team_score, transferred, home_place_id
+                FROM territory_action_results
+                WHERE game_session_id = ? AND team_id = ? AND action_id = ?
+                """,
+                (game_session_id, team_id, action_id),
+            ).fetchone()
+            if existing:
+                return ClaimResult(
+                    claimed=bool(existing[1]),
+                    score_delta=existing[2],
+                    team_score=existing[3],
+                    transferred=bool(existing[4]),
+                    home_place_id=existing[5],
+                    replayed=True,
+                )
             result = self._claim_with_connection(
                 connection,
                 game_session_id=game_session_id,
@@ -285,6 +335,36 @@ class PersistentGameStore(_TerritoryStoreMixin):
                 place_id=place_id,
                 score=score,
                 occurred_at=action_id,
+            )
+            home = connection.execute(
+                "SELECT home_place_id FROM home_states WHERE game_session_id = ? AND team_id = ?",
+                (game_session_id, team_id),
+            ).fetchone()
+            result = ClaimResult(
+                claimed=result.claimed,
+                score_delta=result.score_delta,
+                team_score=result.team_score,
+                transferred=result.transferred,
+                home_place_id=home[0] if home else None,
+            )
+            connection.execute(
+                """
+                INSERT INTO territory_action_results
+                    (game_session_id, team_id, action_id, place_id, claimed,
+                     score_delta, team_score, transferred, home_place_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    game_session_id,
+                    team_id,
+                    action_id,
+                    place_id,
+                    int(result.claimed),
+                    result.score_delta,
+                    result.team_score,
+                    int(result.transferred),
+                    result.home_place_id,
+                ),
             )
         return result
 
