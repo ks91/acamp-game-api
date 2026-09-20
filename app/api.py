@@ -129,6 +129,21 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify(error="invalid team token"), 401
         return jsonify(_team_session(app, team_id)["scenario"])
 
+    @app.get("/v1/game/state")
+    def game_state():
+        token = _bearer_token(request.headers.get("Authorization"))
+        team_id = app.config["TEAM_TOKENS"].get(token)
+        if team_id is None:
+            return jsonify(error="invalid team token"), 401
+        session = _resolved_team_session(app, team_id)
+        game_store = PersistentGameStore(app.config["DATABASE_PATH"])
+        state = game_store.public_state(session["game_session_id"], team_id)
+        state.update(game_store.team_summary(session["game_session_id"], team_id))
+        state["game_session_id"] = session["game_session_id"]
+        state["status"] = session["status"]
+        state["scenario"] = session["scenario"]
+        return jsonify(state)
+
     @app.post("/v1/location-samples")
     def create_location_sample():
         token = _bearer_token(request.headers.get("Authorization"))

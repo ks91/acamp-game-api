@@ -223,6 +223,40 @@ class PersistentGameStore(_TerritoryStoreMixin):
             "home_place_id": home[0] if home else None,
         }
 
+    def public_state(self, game_session_id: str, team_id: str) -> dict:
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            territories = [
+                {"place_id": row[0], "owner": row[1], "points": row[2]}
+                for row in connection.execute(
+                    """
+                    SELECT place_id, owner_team_id, score FROM territory_claims
+                    WHERE game_session_id = ? ORDER BY place_id
+                    """,
+                    (game_session_id,),
+                )
+            ]
+            home = connection.execute(
+                "SELECT home_place_id FROM home_states WHERE game_session_id = ? AND team_id = ?",
+                (game_session_id, team_id),
+            ).fetchone()
+            ranking = [
+                {"team_id": row[0], "score": row[1]}
+                for row in connection.execute(
+                    """
+                    SELECT owner_team_id, COALESCE(SUM(score), 0) AS total
+                    FROM territory_claims WHERE game_session_id = ?
+                    GROUP BY owner_team_id ORDER BY total DESC, owner_team_id
+                    """,
+                    (game_session_id,),
+                )
+            ]
+        return {
+            "territories": territories,
+            "home_place_id": home[0] if home else None,
+            "ranking": ranking,
+        }
+
     def set_home(self, game_session_id: str, team_id: str, place_id: str) -> None:
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:
