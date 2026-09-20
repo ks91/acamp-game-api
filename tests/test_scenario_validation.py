@@ -20,6 +20,27 @@ class ScenarioValidationTests(unittest.TestCase):
         errors = validate_scenario({"id": "test-1", "name": "試作", "places": [{"id": "place-1", "name": "地点", "latitude": 35.0, "longitude": 139.0, "radius_m": 40, "points": 120}]})
         self.assertEqual([], errors)
 
+    def test_game_duration_and_home_candidates_are_valid_scenario_settings(self):
+        errors = validate_scenario({
+            "id": "territory-1",
+            "name": "陣地戦",
+            "game_duration_seconds": 1800,
+            "home_candidates": ["high-point-1", "high-point-2"],
+            "places": [],
+        })
+        self.assertEqual([], errors)
+
+    def test_invalid_game_duration_and_home_candidates_are_rejected(self):
+        errors = validate_scenario({
+            "id": "territory-1",
+            "name": "陣地戦",
+            "game_duration_seconds": 0,
+            "home_candidates": ["ok", 2],
+            "places": [],
+        })
+        self.assertIn("game_duration_seconds must be a positive integer", errors)
+        self.assertIn("home_candidates must be a list of place ids", errors)
+
     def test_duplicate_place_id_is_rejected(self):
         errors = validate_scenario({"id": "test-1", "name": "試作", "places": [{"id": "same", "name": "A", "latitude": 35.0, "longitude": 139.0, "radius_m": 40, "points": 120}, {"id": "same", "name": "B", "latitude": 35.0, "longitude": 139.0, "radius_m": 40, "points": 120}]})
         self.assertIn("duplicate place id: same", errors)

@@ -43,6 +43,7 @@ class TeamStateEndpointTests(unittest.TestCase):
                 "team_id": "green",
                 "score": 0,
                 "claimed_places": [],
+                "home_place_id": None,
                 "location_event_count": 1,
                 "latest_location": {
                     "event_id": 1,

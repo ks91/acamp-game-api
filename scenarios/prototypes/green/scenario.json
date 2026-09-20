@@ -84,5 +84,11 @@
   "ui": {
     "accent_color": "#2E7D32",
     "background_color": "#E8F5E9"
-  }
+  },
+  "game_duration_seconds": 1800,
+  "home_candidates": [
+    "center-building",
+    "cafeteria-fuji"
+  ],
+  "claim_policy": "territory"
 }

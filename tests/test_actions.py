@@ -77,6 +77,8 @@ class ActionsEndpointTests(unittest.TestCase):
                 "place_id": "time-site",
                 "score_delta": 120,
                 "team_score": 120,
+                "transferred": False,
+                "home_place_id": None,
             },
             first.get_json(),
         )
@@ -88,6 +90,8 @@ class ActionsEndpointTests(unittest.TestCase):
                 "place_id": "time-site",
                 "score_delta": 0,
                 "team_score": 120,
+                "transferred": False,
+                "home_place_id": None,
             },
             second.get_json(),
         )
@@ -205,6 +209,121 @@ class ActionsEndpointTests(unittest.TestCase):
             )
 
         self.assertEqual(120, app.config["PLACE_DEFINITIONS"]["time-site"]["points"])
+    def test_default_claim_policy_keeps_each_teams_discoveries_independent(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "independent-claims.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "shared-1", "status": "test", "scenario": {"places": []}},
+                    "blue": {"game_session_id": "shared-1", "status": "test", "scenario": {"places": []}},
+                },
+                "PLACE_SCORES": {"cat-point": 30},
+            }
+        ).test_client()
+        claim = {"game_session_id": "shared-1", "type": "claim_place", "place_id": "cat-point"}
+
+        green = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=dict(claim, action_id="green-1"))
+        blue = client.post("/v1/actions", headers={"Authorization": "Bearer blue-token"}, json=dict(claim, action_id="blue-1"))
+
+        self.assertEqual(201, green.status_code)
+        self.assertEqual(201, blue.status_code)
+        self.assertFalse(blue.get_json()["transferred"])
+
+    def test_claiming_a_place_transfers_the_flag_between_teams(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "territory.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "PLACE_SCORES": {"cat-point": 30},
+                "GAME_SESSION_ID": "territory-1",
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                },
+            }
+        ).test_client()
+        claim = {
+            "action_id": "claim-1",
+            "game_session_id": "territory-1",
+            "type": "claim_place",
+            "place_id": "cat-point",
+        }
+
+        first = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=claim)
+        second = client.post("/v1/actions", headers={"Authorization": "Bearer blue-token"}, json=dict(claim, action_id="claim-2"))
+
+        self.assertEqual(201, first.status_code)
+        self.assertEqual(201, second.status_code)
+        self.assertFalse(first.get_json()["transferred"])
+        self.assertTrue(second.get_json()["transferred"])
+        self.assertEqual(30, second.get_json()["score_delta"])
+
+    def test_retrying_an_old_action_cannot_recapture_a_place(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "retry-after-transfer.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "PLACE_SCORES": {"cat-point": 30},
+                "GAME_SESSION_ID": "territory-1",
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                },
+            }
+        ).test_client()
+        action = {
+            "action_id": "green-action-1",
+            "game_session_id": "territory-1",
+            "type": "claim_place",
+            "place_id": "cat-point",
+        }
+        first = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=action)
+        client.post(
+            "/v1/actions",
+            headers={"Authorization": "Bearer blue-token"},
+            json=dict(action, action_id="blue-action-1"),
+        )
+
+        retry = client.post("/v1/actions", headers={"Authorization": "Bearer green-token"}, json=action)
+        state = client.get("/v1/game/state", headers={"Authorization": "Bearer green-token"})
+
+        self.assertEqual(201, first.status_code)
+        self.assertEqual(200, retry.status_code)
+        self.assertEqual(first.get_json(), retry.get_json())
+        self.assertEqual("blue", state.get_json()["territories"][0]["owner"])
+
+    def test_capturing_an_opponents_home_does_not_reveal_its_new_location(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "secret-home.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "PLACE_SCORES": {"green-home": 100, "green-high": 50},
+                "GAME_SESSION_ID": "territory-1",
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "territory-1", "status": "test", "home_place_id": "green-home", "scenario": {"claim_policy": "territory", "places": []}},
+                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"claim_policy": "territory", "places": []}},
+                },
+            }
+        ).test_client()
+        green_headers = {"Authorization": "Bearer green-token"}
+        blue_headers = {"Authorization": "Bearer blue-token"}
+        claim = {"game_session_id": "territory-1", "type": "claim_place"}
+        client.post("/v1/actions", headers=green_headers, json=dict(claim, action_id="g1", place_id="green-home"))
+        client.post("/v1/actions", headers=green_headers, json=dict(claim, action_id="g2", place_id="green-high"))
+
+        capture = client.post(
+            "/v1/actions", headers=blue_headers,
+            json=dict(claim, action_id="b1", place_id="green-home"),
+        )
+
+        self.assertIsNone(capture.get_json()["home_place_id"])
+        state = client.get("/v1/team/state", headers=green_headers).get_json()
+        self.assertEqual("green-high", state["home_place_id"])
 
 
 if __name__ == "__main__":
