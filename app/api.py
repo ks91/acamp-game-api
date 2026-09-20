@@ -77,6 +77,15 @@ def _team_sessions_from_environment() -> dict:
     return sessions
 
 
+def _selected_game_team(app: Flask, player_team_id: str) -> str | None:
+    requested = request.args.get("game_team")
+    if requested is None:
+        return player_team_id
+    if requested not in app.config["TEAM_SESSIONS"]:
+        return None
+    return requested
+
+
 def _team_session(app: Flask, team_id: str) -> dict:
     assigned = app.config["TEAM_SESSIONS"].get(team_id)
     if assigned is not None:
@@ -135,7 +144,14 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        return jsonify(_team_session(app, team_id)["scenario"])
+        game_team_id = _selected_game_team(app, team_id)
+        if game_team_id is None:
+            return jsonify(error="unknown game team"), 403
+        definition = dict(_team_session(app, game_team_id)["scenario"])
+        definition["player_team_id"] = team_id
+        definition["game_team_id"] = game_team_id
+        definition["game_session_id"] = _team_session(app, game_team_id)["game_session_id"]
+        return jsonify(definition)
 
     @app.get("/v1/game/state")
     def game_state():
@@ -191,7 +207,11 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        session = _resolved_team_session(app, team_id)
+        player_session = _resolved_team_session(app, team_id)
+        game_team_id = _selected_game_team(app, team_id)
+        if game_team_id is None:
+            return jsonify(error="unknown game team"), 403
+        session = _resolved_team_session(app, game_team_id)
         if session["status"] == "paused":
             return jsonify(error="game session is paused"), 409
         if session["status"] == "finished":
@@ -200,7 +220,7 @@ def create_app(config: dict | None = None) -> Flask:
         if not isinstance(payload, dict) or payload.get("type") != "claim_place":
             return jsonify(error="unsupported action"), 400
         requested_device_id = payload.get("device_id")
-        play_device_id = session.get("play_device_id")
+        play_device_id = player_session.get("play_device_id")
         if play_device_id and requested_device_id != play_device_id:
             return jsonify(error="device is not allowed to claim"), 403
         place_id = payload.get("place_id")
@@ -238,13 +258,11 @@ def create_app(config: dict | None = None) -> Flask:
         else:
             return jsonify(error="unknown place_id"), 404
         try:
-            requested_session_id = str(payload["game_session_id"])
             action_id = str(payload["action_id"])
+            requested_session_id = str(payload["game_session_id"])
         except KeyError:
             return jsonify(error="invalid action"), 400
         game_session_id = session["game_session_id"] or requested_session_id
-        if session["game_session_id"] and requested_session_id != game_session_id:
-            return jsonify(error="game session does not match team assignment"), 403
 
         game_store = PersistentGameStore(app.config["DATABASE_PATH"])
         if session["scenario"].get("claim_policy") == "territory":
@@ -341,13 +359,22 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
+        game_team_id = _selected_game_team(app, team_id)
+        if game_team_id is None:
+            return jsonify(error="unknown game team"), 403
+        session = _resolved_team_session(app, game_team_id)
         location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
         if location_state["latest_location"]:
             location_state["latest_location"].pop("received_at")
         game_state = PersistentGameStore(app.config["DATABASE_PATH"]).team_summary(
-            _resolved_team_session(app, team_id)["game_session_id"], team_id
+            session["game_session_id"], team_id
         )
         location_state.update(game_state)
+        if request.args.get("game_team") is not None:
+            location_state["player_team_id"] = team_id
+            location_state["game_team_id"] = game_team_id
+            location_state["game_session_id"] = session["game_session_id"]
+            location_state["status"] = session["status"]
         return jsonify(location_state)
 
     return app
