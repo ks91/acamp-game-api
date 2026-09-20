@@ -77,6 +77,8 @@ class ActionsEndpointTests(unittest.TestCase):
                 "place_id": "time-site",
                 "score_delta": 120,
                 "team_score": 120,
+                "transferred": False,
+                "home_place_id": None,
             },
             first.get_json(),
         )
@@ -88,6 +90,8 @@ class ActionsEndpointTests(unittest.TestCase):
                 "place_id": "time-site",
                 "score_delta": 0,
                 "team_score": 120,
+                "transferred": False,
+                "home_place_id": None,
             },
             second.get_json(),
         )
@@ -230,6 +234,35 @@ class ActionsEndpointTests(unittest.TestCase):
         self.assertFalse(first.get_json()["transferred"])
         self.assertTrue(second.get_json()["transferred"])
         self.assertEqual(30, second.get_json()["score_delta"])
+
+    def test_capturing_an_opponents_home_does_not_reveal_its_new_location(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.temporary_directory.name, "secret-home.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green", "blue-token": "blue"},
+                "PLACE_SCORES": {"green-home": 100, "green-high": 50},
+                "GAME_SESSION_ID": "territory-1",
+                "TEAM_SESSIONS": {
+                    "green": {"game_session_id": "territory-1", "status": "test", "home_place_id": "green-home", "scenario": {"places": []}},
+                    "blue": {"game_session_id": "territory-1", "status": "test", "scenario": {"places": []}},
+                },
+            }
+        ).test_client()
+        green_headers = {"Authorization": "Bearer green-token"}
+        blue_headers = {"Authorization": "Bearer blue-token"}
+        claim = {"game_session_id": "territory-1", "type": "claim_place"}
+        client.post("/v1/actions", headers=green_headers, json=dict(claim, action_id="g1", place_id="green-home"))
+        client.post("/v1/actions", headers=green_headers, json=dict(claim, action_id="g2", place_id="green-high"))
+
+        capture = client.post(
+            "/v1/actions", headers=blue_headers,
+            json=dict(claim, action_id="b1", place_id="green-home"),
+        )
+
+        self.assertIsNone(capture.get_json()["home_place_id"])
+        state = client.get("/v1/team/state", headers=green_headers).get_json()
+        self.assertEqual("green-high", state["home_place_id"])
 
 
 if __name__ == "__main__":

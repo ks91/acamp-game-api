@@ -40,6 +40,38 @@ class _TerritoryStoreMixin:
         )
 
     @staticmethod
+    def _migrate_legacy_claims(
+        connection: sqlite3.Connection, occurred_at_column: str
+    ) -> None:
+        if occurred_at_column not in {"action_id", "occurred_at"}:
+            raise ValueError("unsupported legacy occurrence column")
+        connection.execute(
+            f"""
+            INSERT OR IGNORE INTO territory_claims
+                (game_session_id, place_id, owner_team_id, score, occurred_at)
+            SELECT legacy.game_session_id, legacy.place_id, legacy.team_id,
+                   legacy.score, legacy.{occurred_at_column}
+            FROM spot_claims AS legacy
+            WHERE NOT EXISTS (
+                SELECT 1 FROM spot_claims AS newer
+                WHERE newer.game_session_id = legacy.game_session_id
+                  AND newer.place_id = legacy.place_id
+                  AND newer.rowid > legacy.rowid
+            )
+            """
+        )
+
+    @staticmethod
+    def _set_home_if_missing(connection, game_session_id, team_id, place_id) -> None:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO home_states (game_session_id, team_id, home_place_id)
+            VALUES (?, ?, ?)
+            """,
+            (game_session_id, team_id, place_id),
+        )
+
+    @staticmethod
     def _team_score(connection, game_session_id: str, team_id: str) -> int:
         return connection.execute(
             """
@@ -109,7 +141,6 @@ class _TerritoryStoreMixin:
             """,
             (game_session_id, place_id, team_id, score, occurred_at),
         )
-        home_place_id = None
         if previous_owner:
             home = connection.execute(
                 """
@@ -119,7 +150,7 @@ class _TerritoryStoreMixin:
                 (game_session_id, previous_owner, place_id),
             ).fetchone()
             if home:
-                home_place_id = _TerritoryStoreMixin._relocate_home(
+                _TerritoryStoreMixin._relocate_home(
                     connection, game_session_id, previous_owner
                 )
         return ClaimResult(
@@ -127,7 +158,6 @@ class _TerritoryStoreMixin:
             score_delta=score,
             team_score=_TerritoryStoreMixin._team_score(connection, game_session_id, team_id),
             transferred=transferred,
-            home_place_id=home_place_id,
         )
 
 
@@ -152,6 +182,7 @@ class PersistentGameStore(_TerritoryStoreMixin):
                 """
             )
             self._initialize_territories(connection)
+            self._migrate_legacy_claims(connection, "action_id")
 
     def team_summary(self, game_session_id: str, team_id: str) -> dict:
         self.initialize()
@@ -205,6 +236,11 @@ class PersistentGameStore(_TerritoryStoreMixin):
                 (game_session_id, team_id, place_id),
             )
 
+    def set_home_if_missing(self, game_session_id: str, team_id: str, place_id: str) -> None:
+        self.initialize()
+        with sqlite3.connect(self.database_path) as connection:
+            self._set_home_if_missing(connection, game_session_id, team_id, place_id)
+
     def claim_place(self, *, game_session_id, team_id, place_id, score, action_id):
         self.initialize()
         with sqlite3.connect(self.database_path) as connection:
@@ -237,6 +273,7 @@ class GameStore(_TerritoryStoreMixin):
             """
         )
         self._initialize_territories(self.connection)
+        self._migrate_legacy_claims(self.connection, "occurred_at")
         self.connection.commit()
 
     def set_home(self, game_session_id: str, team_id: str, place_id: str) -> None:
@@ -249,6 +286,12 @@ class GameStore(_TerritoryStoreMixin):
                 DO UPDATE SET home_place_id = excluded.home_place_id
                 """,
                 (game_session_id, team_id, place_id),
+            )
+
+    def set_home_if_missing(self, game_session_id: str, team_id: str, place_id: str) -> None:
+        with self.connection:
+            self._set_home_if_missing(
+                self.connection, game_session_id, team_id, place_id
             )
 
     def home_for(self, game_session_id: str, team_id: str) -> str | None:
