@@ -4,6 +4,13 @@ from app.scenario_validation import validate_scenario
 
 
 class ScenarioValidationTests(unittest.TestCase):
+    def test_narrative_fields_must_be_text_when_present(self):
+        errors = validate_scenario({"id": "test-1", "name": "試作", "intro": 1, "places": [{"id": "place-1", "name": "地点", "latitude": 35.0, "longitude": 139.0, "radius_m": 40, "points": 120, "description": 2, "hint": 3, "claim_message": 4}]})
+        self.assertIn("intro must be text", errors)
+        self.assertIn("place-1: description must be text", errors)
+        self.assertIn("place-1: hint must be text", errors)
+        self.assertIn("place-1: claim_message must be text", errors)
+
     def test_valid_scenario_has_no_errors(self):
         errors = validate_scenario({"id": "test-1", "name": "試作", "places": [{"id": "place-1", "name": "地点", "latitude": 35.0, "longitude": 139.0, "radius_m": 40, "points": 120}]})
         self.assertEqual([], errors)

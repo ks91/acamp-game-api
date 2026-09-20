@@ -6,6 +6,8 @@ def validate_scenario(scenario):
         errors.append("scenario id is required")
     if not isinstance(scenario.get("name"), str) or not scenario["name"].strip():
         errors.append("scenario name is required")
+    if "intro" in scenario and not isinstance(scenario["intro"], str):
+        errors.append("intro must be text")
     places = scenario.get("places")
     if not isinstance(places, list):
         return errors + ["places must be a list"]
@@ -24,6 +26,9 @@ def validate_scenario(scenario):
             place_ids.add(place_id)
         if not isinstance(place.get("name"), str) or not place["name"].strip():
             errors.append("{}: name is required".format(label))
+        for field in ("description", "hint", "claim_message"):
+            if field in place and not isinstance(place[field], str):
+                errors.append("{}: {} must be text".format(label, field))
         latitude = place.get("latitude")
         longitude = place.get("longitude")
         if not isinstance(latitude, (int, float)) or not -90 <= latitude <= 90:

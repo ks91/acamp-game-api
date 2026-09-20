@@ -8,7 +8,10 @@
       "latitude": 35.67751239555854,
       "longitude": 139.69436438878742,
       "radius_m": 40,
-      "points": 120
+      "points": 120,
+      "description": "班の基地。ここから探検を始めよう。",
+      "hint": "班で周囲を観察して、ここにどんな意味を与えるか考えよう。",
+      "claim_message": "地点を発見した！ 次の作戦を班で決めよう。"
     },
     {
       "id": "lawson-youth-center",
@@ -16,7 +19,10 @@
       "latitude": 35.67602057251197,
       "longitude": 139.69445561756925,
       "radius_m": 40,
-      "points": 120
+      "points": 120,
+      "description": "補給と情報交換の地点。",
+      "hint": "班で周囲を観察して、ここにどんな意味を与えるか考えよう。",
+      "claim_message": "地点を発見した！ 次の作戦を班で決めよう。"
     },
     {
       "id": "international-exchange",
@@ -24,7 +30,10 @@
       "latitude": 35.675605588240614,
       "longitude": 139.6946674940398,
       "radius_m": 40,
-      "points": 120
+      "points": 120,
+      "description": "知らないことばや文化の手がかりを探す地点。",
+      "hint": "班で周囲を観察して、ここにどんな意味を与えるか考えよう。",
+      "claim_message": "地点を発見した！ 次の作戦を班で決めよう。"
     },
     {
       "id": "cafeteria-fuji",
@@ -32,7 +41,10 @@
       "latitude": 35.67484017956108,
       "longitude": 139.6936804736062,
       "radius_m": 40,
-      "points": 120
+      "points": 120,
+      "description": "休息と作戦会議の地点。",
+      "hint": "班で周囲を観察して、ここにどんな意味を与えるか考えよう。",
+      "claim_message": "地点を発見した！ 次の作戦を班で決めよう。"
     },
     {
       "id": "center-building",
@@ -40,7 +52,10 @@
       "latitude": 35.67437387858118,
       "longitude": 139.69314002932387,
       "radius_m": 40,
-      "points": 120
+      "points": 120,
+      "description": "今日の活動の中心地点。",
+      "hint": "班で周囲を観察して、ここにどんな意味を与えるか考えよう。",
+      "claim_message": "地点を発見した！ 次の作戦を班で決めよう。"
     },
     {
       "id": "fan-cafe",
@@ -48,7 +63,10 @@
       "latitude": 35.675319068974055,
       "longitude": 139.6927542229375,
       "radius_m": 40,
-      "points": 120
+      "points": 120,
+      "description": "班だけの発見を物語に変える地点。",
+      "hint": "班で周囲を観察して、ここにどんな意味を与えるか考えよう。",
+      "claim_message": "地点を発見した！ 次の作戦を班で決めよう。"
     },
     {
       "id": "sangubashi-station",
@@ -56,7 +74,11 @@
       "latitude": 35.678653992614024,
       "longitude": 139.69351436052096,
       "radius_m": 40,
-      "points": 120
+      "points": 120,
+      "description": "街と会場をつなぐ入口。",
+      "hint": "班で周囲を観察して、ここにどんな意味を与えるか考えよう。",
+      "claim_message": "地点を発見した！ 次の作戦を班で決めよう。"
     }
-  ]
+  ],
+  "intro": "この場所を、イエロー班だけのゲーム世界に変えよう。"
 }
