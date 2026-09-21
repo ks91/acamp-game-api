@@ -338,7 +338,10 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        session = _resolved_team_session(app, team_id)
+        game_mode = _selected_game_mode(app, team_id)
+        if game_mode == "":
+            return jsonify(error="unknown game mode"), 403
+        session = _resolved_team_session(app, team_id, game_mode)
         payload = request.get_json(silent=True) or {}
         if payload.get("confirm") is not True:
             return jsonify(error="restart confirmation is required"), 400
