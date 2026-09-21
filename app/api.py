@@ -295,6 +295,30 @@ def create_app(config: dict | None = None) -> Flask:
         }
         return jsonify(response), 201 if result.claimed and not result.replayed else 200
 
+    @app.post("/v1/test-session/restart")
+    def restart_test_session():
+        token = _bearer_token(request.headers.get("Authorization"))
+        team_id = app.config["TEAM_TOKENS"].get(token)
+        if team_id is None:
+            return jsonify(error="invalid team token"), 401
+        session = _resolved_team_session(app, team_id)
+        payload = request.get_json(silent=True) or {}
+        if payload.get("confirm") is not True:
+            return jsonify(error="restart confirmation is required"), 400
+        if session["status"] != "test" or not session.get("allow_team_restart"):
+            return jsonify(error="team restart is unavailable for this session"), 403
+        game_session_id = session["game_session_id"]
+        game_store = PersistentGameStore(app.config["DATABASE_PATH"])
+        game_store.reset_session(game_session_id)
+        state = game_store.team_summary(game_session_id, team_id)
+        return jsonify(
+            game_session_id=game_session_id,
+            restarted=True,
+            score=state["score"],
+            claimed_places=state["claimed_places"],
+            home_place_id=state.get("home_place_id"),
+        )
+
     @app.post("/v1/admin/session/status")
     def set_session_status():
         token = _bearer_token(request.headers.get("Authorization"))
