@@ -69,11 +69,17 @@ def _team_sessions_from_environment() -> dict:
     with open(path, "r", encoding="utf-8") as session_file:
         sessions = json.load(session_file)
     directory = os.path.dirname(path)
-    for session in sessions.values():
+
+    def load_scenario(session: dict) -> None:
         scenario_path = session.get("scenario_path")
         if scenario_path:
             with open(os.path.join(directory, scenario_path), "r", encoding="utf-8") as scenario_file:
                 session["scenario"] = json.load(scenario_file)
+
+    for session in sessions.values():
+        load_scenario(session)
+        for mode_session in session.get("modes", {}).values():
+            load_scenario(mode_session)
     return sessions
 
 

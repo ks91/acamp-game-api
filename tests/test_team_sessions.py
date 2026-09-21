@@ -20,6 +20,22 @@ class TeamSessionEndpointTests(unittest.TestCase):
                 sessions = _team_sessions_from_environment()
         self.assertEqual("Green", sessions["green"]["scenario"]["name"])
 
+    def test_registry_loads_scenarios_for_each_published_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for filename, name in (("center.json", "センター棟テスト"), ("tokyo.json", "東京版")):
+                with open(os.path.join(directory, filename), "w", encoding="utf-8") as handle:
+                    json.dump({"id": filename, "name": name, "places": []}, handle)
+            registry_path = os.path.join(directory, "sessions.json")
+            with open(registry_path, "w", encoding="utf-8") as handle:
+                json.dump({"green": {"default_mode": "center_test", "modes": {
+                    "center_test": {"game_session_id": "center-green-1", "status": "test", "scenario_path": "center.json"},
+                    "tokyo": {"game_session_id": "tokyo-green-1", "status": "test", "scenario_path": "tokyo.json"}
+                }}}, handle)
+            with patch.dict(os.environ, {"ACAMP_GAME_TEAM_SESSIONS_PATH": registry_path}):
+                sessions = _team_sessions_from_environment()
+        self.assertEqual("センター棟テスト", sessions["green"]["modes"]["center_test"]["scenario"]["name"])
+        self.assertEqual("東京版", sessions["green"]["modes"]["tokyo"]["scenario"]["name"])
+
     def test_team_receives_its_assigned_session_scenario(self):
         client = create_app(
             {
