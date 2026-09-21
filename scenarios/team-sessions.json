@@ -1,5 +1,5 @@
 {
-  "green": {"game_session_id": "prototype-green-1", "status": "test", "scenario_path": "prototypes/green/scenario.json", "play_device_id": "green-ipad", "development_device_id": "green-wifi-ipad"},
+  "green": {"game_session_id": "prototype-green-1", "status": "test", "allow_team_restart": true, "scenario_path": "prototypes/green/scenario.json", "play_device_id": "green-ipad", "development_device_id": "green-wifi-ipad"},
   "blue": {"game_session_id": "prototype-blue-1", "status": "test", "scenario_path": "prototypes/blue/scenario.json", "play_device_id": "blue-ipad", "development_device_id": "blue-wifi-ipad"},
   "red": {"game_session_id": "prototype-red-1", "status": "test", "scenario_path": "prototypes/red/scenario.json", "play_device_id": "red-ipad", "development_device_id": "red-wifi-ipad"},
   "yellow": {"game_session_id": "prototype-yellow-1", "status": "test", "scenario_path": "prototypes/yellow/scenario.json", "play_device_id": "yellow-ipad", "development_device_id": "yellow-wifi-ipad"},
