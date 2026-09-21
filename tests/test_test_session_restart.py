@@ -57,6 +57,28 @@ class TestSessionRestartTests(unittest.TestCase):
         self.assertEqual(0, response.get_json()["score"])
         self.assertEqual([], response.get_json()["claimed_places"])
 
+    def test_team_can_restart_its_selected_test_mode_without_touching_another_mode(self):
+        client = create_app(
+            {
+                "TESTING": True,
+                "DATABASE_PATH": os.path.join(self.directory.name, "mode-game.sqlite3"),
+                "TEAM_TOKENS": {"green-token": "green"},
+                "TEAM_SESSIONS": {"green": {"modes": {
+                    "center_test": {"game_session_id": "center-green-1", "status": "test", "allow_team_restart": True, "scenario": {"places": []}},
+                    "tokyo": {"game_session_id": "tokyo-green-1", "status": "test", "allow_team_restart": True, "scenario": {"places": []}},
+                }}},
+            }
+        ).test_client()
+
+        response = client.post(
+            "/v1/test-session/restart?game_mode=tokyo",
+            headers={"Authorization": "Bearer green-token"},
+            json={"confirm": True},
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("tokyo-green-1", response.get_json()["game_session_id"])
+
     def test_team_cannot_restart_a_live_or_non_restartable_session(self):
         response = self.client.post(
             "/v1/test-session/restart",
