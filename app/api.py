@@ -86,17 +86,34 @@ def _selected_game_team(app: Flask, player_team_id: str) -> str | None:
     return requested
 
 
-def _team_session(app: Flask, team_id: str) -> dict:
+def _selected_game_mode(app: Flask, game_team_id: str) -> str | None:
+    requested = request.args.get("game_mode")
+    assigned = app.config["TEAM_SESSIONS"].get(game_team_id)
+    if not assigned or "modes" not in assigned:
+        return None if requested is None else ""
+    if requested is None:
+        return assigned.get("default_mode", "")
+    return requested if requested in assigned["modes"] else ""
+
+
+def _team_session(app: Flask, team_id: str, game_mode: str | None = None) -> dict | None:
     assigned = app.config["TEAM_SESSIONS"].get(team_id)
     if assigned is not None:
+        modes = assigned.get("modes")
+        if modes is not None:
+            selected_mode = game_mode or assigned.get("default_mode")
+            return modes.get(selected_mode)
         return assigned
     return {
         "game_session_id": app.config["GAME_SESSION_ID"],
         "status": app.config["GAME_STATUS"],
         "scenario": app.config["SCENARIO"],
     }
-def _resolved_team_session(app: Flask, team_id: str) -> dict:
-    session = dict(_team_session(app, team_id))
+def _resolved_team_session(app: Flask, team_id: str, game_mode: str | None = None) -> dict:
+    configured = _team_session(app, team_id, game_mode)
+    if configured is None:
+        raise KeyError("unknown game mode")
+    session = dict(configured)
     session_store = SessionStore(app.config["DATABASE_PATH"])
     session["status"] = session_store.status_for(
         session["game_session_id"], session["status"]
@@ -147,10 +164,15 @@ def create_app(config: dict | None = None) -> Flask:
         game_team_id = _selected_game_team(app, team_id)
         if game_team_id is None:
             return jsonify(error="unknown game team"), 403
-        definition = dict(_team_session(app, game_team_id)["scenario"])
+        game_mode = _selected_game_mode(app, game_team_id)
+        session = _team_session(app, game_team_id, game_mode)
+        if session is None or game_mode == "":
+            return jsonify(error="unknown game mode"), 403
+        definition = dict(session["scenario"])
         definition["player_team_id"] = team_id
         definition["game_team_id"] = game_team_id
-        definition["game_session_id"] = _team_session(app, game_team_id)["game_session_id"]
+        definition["game_mode"] = game_mode
+        definition["game_session_id"] = session["game_session_id"]
         return jsonify(definition)
 
     @app.get("/v1/game/state")
@@ -159,7 +181,13 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        session = _resolved_team_session(app, team_id)
+        game_team_id = _selected_game_team(app, team_id)
+        if game_team_id is None:
+            return jsonify(error="unknown game team"), 403
+        game_mode = _selected_game_mode(app, game_team_id)
+        if game_mode == "":
+            return jsonify(error="unknown game mode"), 403
+        session = _resolved_team_session(app, game_team_id, game_mode)
         game_store = PersistentGameStore(app.config["DATABASE_PATH"])
         configured_home = session.get("home_place_id")
         if configured_home:
@@ -207,11 +235,14 @@ def create_app(config: dict | None = None) -> Flask:
         team_id = app.config["TEAM_TOKENS"].get(token)
         if team_id is None:
             return jsonify(error="invalid team token"), 401
-        player_session = _resolved_team_session(app, team_id)
         game_team_id = _selected_game_team(app, team_id)
         if game_team_id is None:
             return jsonify(error="unknown game team"), 403
-        session = _resolved_team_session(app, game_team_id)
+        game_mode = _selected_game_mode(app, game_team_id)
+        if game_mode == "":
+            return jsonify(error="unknown game mode"), 403
+        player_session = _resolved_team_session(app, team_id, game_mode)
+        session = _resolved_team_session(app, game_team_id, game_mode)
         if session["status"] == "paused":
             return jsonify(error="game session is paused"), 409
         if session["status"] == "finished":
@@ -386,7 +417,10 @@ def create_app(config: dict | None = None) -> Flask:
         game_team_id = _selected_game_team(app, team_id)
         if game_team_id is None:
             return jsonify(error="unknown game team"), 403
-        session = _resolved_team_session(app, game_team_id)
+        game_mode = _selected_game_mode(app, game_team_id)
+        if game_mode == "":
+            return jsonify(error="unknown game mode"), 403
+        session = _resolved_team_session(app, game_team_id, game_mode)
         location_state = LocationStore(app.config["DATABASE_PATH"]).team_state(team_id)
         if location_state["latest_location"]:
             location_state["latest_location"].pop("received_at")
@@ -394,7 +428,7 @@ def create_app(config: dict | None = None) -> Flask:
             session["game_session_id"], team_id
         )
         location_state.update(game_state)
-        if request.args.get("game_team") is not None:
+        if request.args.get("game_team") is not None or request.args.get("game_mode") is not None:
             location_state["player_team_id"] = team_id
             location_state["game_team_id"] = game_team_id
             location_state["game_session_id"] = session["game_session_id"]
