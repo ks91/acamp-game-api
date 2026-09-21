@@ -51,8 +51,11 @@ def main():
     parser.add_argument("--mode", required=True, choices=sorted(MODE_LABELS))
     parser.add_argument("--reason", default="スタッフが新しいラウンドを開始")
     args = parser.parse_args()
-    registry_path = os.environ["ACAMP_GAME_TEAM_SESSIONS_PATH"]
-    with Path(registry_path).open(encoding="utf-8") as source:
+    registry_path = Path(os.environ.get(
+        "ACAMP_GAME_TEAM_SESSIONS_PATH",
+        Path(__file__).resolve().parents[1] / "scenarios" / "team-sessions.json",
+    ))
+    with registry_path.open(encoding="utf-8") as source:
         registry = json.load(source)
     for message in start_team_modes(registry, args.team, args.mode, args.reason):
         print(message)
