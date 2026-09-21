@@ -385,6 +385,39 @@ def create_app(config: dict | None = None) -> Flask:
         PersistentGameStore(app.config["DATABASE_PATH"]).reset_session(game_session_id)
         return jsonify(game_session_id=game_session_id, reset=True, reason=reason)
 
+    @app.post("/v1/admin/team-modes")
+    def install_team_modes():
+        token = _bearer_token(request.headers.get("Authorization"))
+        if not app.config["ADMIN_TOKEN"] or token != app.config["ADMIN_TOKEN"]:
+            return jsonify(error="invalid admin token"), 401
+        payload = request.get_json(silent=True) or {}
+        requested = payload.get("team_modes")
+        registry_path = os.environ.get("ACAMP_GAME_TEAM_SESSIONS_PATH")
+        if not isinstance(requested, dict) or not registry_path:
+            return jsonify(error="team mode registry is unavailable"), 400
+        current = app.config["TEAM_SESSIONS"]
+        for team_id, modes in requested.items():
+            if team_id not in current or not isinstance(modes, dict):
+                return jsonify(error="invalid team modes"), 400
+            for mode, session in modes.items():
+                if mode not in {"center_test", "tokyo"} or not isinstance(session, dict):
+                    return jsonify(error="invalid team mode"), 400
+                if not isinstance(session.get("game_session_id"), str) or not isinstance(session.get("scenario"), dict):
+                    return jsonify(error="invalid mode session"), 400
+        with open(registry_path, "r", encoding="utf-8") as source:
+            persisted = json.load(source)
+        for team_id, modes in requested.items():
+            persisted[team_id].setdefault("modes", {}).update(modes)
+            persisted[team_id].setdefault("default_mode", "center_test")
+            current[team_id].setdefault("modes", {}).update(modes)
+            current[team_id].setdefault("default_mode", "center_test")
+        temporary = registry_path + ".new"
+        with open(temporary, "w", encoding="utf-8") as destination:
+            json.dump(persisted, destination, ensure_ascii=False, indent=2)
+            destination.write("\n")
+        os.replace(temporary, registry_path)
+        return jsonify(updated_teams=sorted(requested), installed=True)
+
     @app.get("/v1/admin/overview")
     def admin_overview():
         token = _bearer_token(request.headers.get("Authorization"))
