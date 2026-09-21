@@ -4,13 +4,28 @@
 import argparse
 import json
 import os
+from pathlib import Path
 from urllib.request import Request, urlopen
 
 from admin_overview import format_overview
 
 
+def admin_token():
+    token = os.environ.get("ACAMP_GAME_ADMIN_TOKEN")
+    if token:
+        return token
+    env_file = Path(os.environ.get("ACAMP_GAME_ENV_FILE", "/etc/acamp-game-api.env"))
+    try:
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("ACAMP_GAME_ADMIN_TOKEN="):
+                return line.partition("=")[2].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    raise RuntimeError("ACAMP_GAME_ADMIN_TOKEN is unavailable; run this staff command with sudo on the API host")
+
+
 def admin_request(path, method="GET", payload=None):
-    token = os.environ["ACAMP_GAME_ADMIN_TOKEN"]
+    token = admin_token()
     base_url = os.environ.get("ACAMP_GAME_API_BASE_URL", "https://game-api.academy-camp.org")
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     request = Request(
