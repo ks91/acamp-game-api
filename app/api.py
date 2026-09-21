@@ -418,6 +418,71 @@ def create_app(config: dict | None = None) -> Flask:
         os.replace(temporary, registry_path)
         return jsonify(updated_teams=sorted(requested), installed=True)
 
+    @app.post("/v1/admin/team-mode-radii")
+    def update_team_mode_radii():
+        token = _bearer_token(request.headers.get("Authorization"))
+        if not app.config["ADMIN_TOKEN"] or token != app.config["ADMIN_TOKEN"]:
+            return jsonify(error="invalid admin token"), 401
+        payload = request.get_json(silent=True) or {}
+        team_id = payload.get("team_id")
+        mode = payload.get("mode")
+        radii = payload.get("radii")
+        registry_path = os.environ.get("ACAMP_GAME_TEAM_SESSIONS_PATH")
+        if (
+            not registry_path
+            or not isinstance(team_id, str)
+            or not team_id
+            or not isinstance(mode, str)
+            or not mode
+            or not isinstance(radii, dict)
+            or not radii
+            or any(
+                not isinstance(place_id, str)
+                or not place_id
+                or not isinstance(radius_m, int)
+                or isinstance(radius_m, bool)
+                or radius_m <= 0
+                for place_id, radius_m in radii.items()
+            )
+        ):
+            return jsonify(error="invalid team mode radii"), 400
+        try:
+            with open(registry_path, "r", encoding="utf-8") as source:
+                persisted = json.load(source)
+        except (OSError, json.JSONDecodeError):
+            return jsonify(error="team mode registry is unavailable"), 400
+        team = persisted.get(team_id)
+        if not isinstance(team, dict):
+            return jsonify(error="unknown team"), 404
+        session = team.get("modes", {}).get(mode)
+        if not isinstance(session, dict):
+            return jsonify(error="unknown mode"), 404
+        scenario = session.get("scenario")
+        if not isinstance(scenario, dict):
+            return jsonify(error="mode scenario is unavailable"), 400
+        places = {place.get("id"): place for place in scenario.get("places", []) if isinstance(place, dict)}
+        if any(place_id not in places for place_id in radii):
+            return jsonify(error="unknown place"), 404
+        for place_id, radius_m in radii.items():
+            places[place_id]["radius_m"] = radius_m
+        temporary = registry_path + ".new"
+        with open(temporary, "w", encoding="utf-8") as destination:
+            json.dump(persisted, destination, ensure_ascii=False, indent=2)
+            destination.write("\n")
+        os.replace(temporary, registry_path)
+
+        current_session = app.config["TEAM_SESSIONS"].get(team_id, {}).get("modes", {}).get(mode)
+        if isinstance(current_session, dict) and isinstance(current_session.get("scenario"), dict):
+            current_places = {
+                place.get("id"): place
+                for place in current_session["scenario"].get("places", [])
+                if isinstance(place, dict)
+            }
+            for place_id, radius_m in radii.items():
+                if place_id in current_places:
+                    current_places[place_id]["radius_m"] = radius_m
+        return jsonify(updated=True, team_id=team_id, mode=mode, radii=radii)
+
     @app.get("/v1/admin/overview")
     def admin_overview():
         token = _bearer_token(request.headers.get("Authorization"))
